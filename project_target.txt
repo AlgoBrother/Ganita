@@ -1,0 +1,8 @@
+Maya current paramters => 123 Million paramters
+
+New feature => Math
+
+Target Maths 
+
+Additon, Multiply, Subtraction, DIvision
+Graph using Desmos
