@@ -1,77 +1,80 @@
-fn add(a: i32, b: i32) -> f64 {
-    a as f64 + b as f64
+// I will be using f64 for precision and to handl some future tests withfloating point i have in mind.
+fn add(numbers: &[f64]) -> f64 {
+    numbers.iter().map(|&n| n).sum()
 }
 
-fn subtract(a: i32, b: i32) -> f64 {
-    a as f64 - b as f64
+fn subtract(numbers: &[f64]) -> f64 {
+    // subtraction operation
+    let first = numbers[0];
+    numbers[1..].iter().fold(first, |acc, &n| acc - n)
 }
 
-fn multiply(a: i32, b: i32) -> f64 {
-    a as f64 * b as f64
+fn multiply(numbers: &[f64]) -> f64 {
+    numbers.iter().product() 
 }
 
-fn divide(a: i32, b: i32) -> Option<f64> {
-    if b != 0 {
-        Some(a as f64 / b as f64)
+fn divide(a: f64, b: f64) -> Option<f64> {
+    if b != 0.0 {
+        Some(a / b)
     } else {
         None
     }
 }
 
 // ======= Number word conversion functions =======
-fn word_value(word: &str) -> Option<i32>{
+fn word_value(word: &str) -> Option<f64>{
   match word {
-        "zero" => Some(0),
-        "one" => Some(1),
-        "two" => Some(2),
-        "three" => Some(3),
-        "four" => Some(4),
-        "five" => Some(5),
-        "six" => Some(6),
-        "seven" => Some(7),
-        "eight" => Some(8),
-        "nine" => Some(9),
+        "zero" => Some(0.0),
+        "one" => Some(1.0),
+        "two" => Some(2.0),
+        "three" => Some(3.0),
+        "four" => Some(4.0),
+        "five" => Some(5.0),
+        "six" => Some(6.0),
+        "seven" => Some(7.0),
+        "eight" => Some(8.0),
+        "nine" => Some(9.0),
 
-        "ten" => Some(10),
-        "eleven" => Some(11),
-        "twelve" => Some(12),
-        "thirteen" => Some(13),
-        "fourteen" => Some(14),
-        "fifteen" => Some(15),
-        "sixteen" => Some(16),
-        "seventeen" => Some(17),
-        "eighteen" => Some(18),
-        "nineteen" => Some(19),
+        "ten" => Some(10.0),
+        "eleven" => Some(11.0),
+        "twelve" => Some(12.0),
+        "thirteen" => Some(13.0),
+        "fourteen" => Some(14.0),
+        "fifteen" => Some(15.0),
+        "sixteen" => Some(16.0),
+        "seventeen" => Some(17.0),
+        "eighteen" => Some(18.0),
+        "nineteen" => Some(19.0),
 
-        "twenty" => Some(20),
-        "thirty" => Some(30),
-        "forty" => Some(40),
-        "fifty" => Some(50),
-        "sixty" => Some(60),
-        "seventy" => Some(70),
-        "eighty" => Some(80),
-        "ninety" => Some(90),
+        "twenty" => Some(20.0),
+        "thirty" => Some(30.0),
+        "forty" => Some(40.0),
+        "fifty" => Some(50.0),
+        "sixty" => Some(60.0),
+        "seventy" => Some(70.0),
+        "eighty" => Some(80.0),
+        "ninety" => Some(90.0),
 
-        "hundred" => Some(100),
-        "thousand" => Some(1_000),
-        "million" => Some(1_000_000),
-        "billion" => Some(1_000_000_000),
+        "hundred" => Some(100.0),
+        "thousand" => Some(1_000.0),
+        "million" => Some(1_000_000.0),
+        "billion" => Some(1_000_000_000.0),
 
         _ => None,
   }
 }
 
-pub fn word_to_number(word: &str) -> Option<i32> {
-    let mut total = 0;
-    let mut current = 0;
+pub fn word_to_number(word: &str) -> Option<f64> {
+    let mut total = 0.0;
+    let mut current = 0.0;
 
     for part in word.split_whitespace() {
-        if let Some(value) = word_value(part) {
-            if value == 100 {
-                current *= 100;
-            } else if value >= 1000 {
+        if let Some(value) = word_value(part)  {
+            if value == 100.0 {
+                current *= 100.0;
+            } else if value >= 1000.0 {
                 total += current * value;
-                current = 0;
+                current = 0.0;
             } else {
                 current += value;
             }
@@ -81,7 +84,7 @@ pub fn word_to_number(word: &str) -> Option<i32> {
     }
 
     total += current;
-    Some(total)
+    Some(total) as Option<f64>
 }
 
 fn is_number_word(word: &str) -> bool {
@@ -90,21 +93,12 @@ fn is_number_word(word: &str) -> bool {
 
 // ========= End of number word conversion functions =======
 
-// fn operation_order(){
-//     // function to see what teh text wants
-//     // subtract x from y means y - x. we dont want to do x - y. 
-//     // same for divide y by x means y / x. we dont want to do x / y.
-//     // Add five and ten means 5 + 10. <tbh new function for to convert word into numbers
 
-
-
-
-// }
 
 pub fn text_analyser(text: &str){
     // This function will analyze the text and print the objective (add, subtract, multiply, divide) and the numbers involved.
     let words: Vec<&str> = text.split_whitespace().collect();
-    let mut numbers: Vec<i32> = Vec::new();
+    let mut numbers: Vec<f64> = Vec::new();
     let mut current_phrase = String::new(); // This will hold the current phrase being analyzed, which can be useful for handling multi-word number phrases like "twenty five"
 
     let mut operation = "";
@@ -138,7 +132,7 @@ pub fn text_analyser(text: &str){
              }
 
              _ => {
-                if let Ok(num) = word.parse::<i32>() {
+                if let Ok(num) = word.parse::<f64>() {
                     numbers.push(num);
                 } else if is_number_word(word) {
                     current_phrase.push_str(word);
@@ -163,9 +157,9 @@ pub fn text_analyser(text: &str){
     }
 
     let result = match operation {
-        "add" if numbers.len() >= 2 => add(numbers[0], numbers[1]),
-        "subtract" if numbers.len() >= 2 => subtract(numbers[0], numbers[1]),
-        "multiply" if numbers.len() >= 2 => multiply(numbers[0], numbers[1]),
+        "add" if numbers.len() >= 2 => add(&numbers),
+        "subtract" if numbers.len() >= 2 => subtract(&numbers),
+        "multiply" if numbers.len() >= 2 => multiply(&numbers),
         "divide" if numbers.len() >= 2 => divide(numbers[0], numbers[1]).unwrap_or_else(|| {
             println!("Cannot divide by zero");
             0.0 // Return a default value in case of division by zero
