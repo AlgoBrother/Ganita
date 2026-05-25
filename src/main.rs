@@ -1,4 +1,4 @@
-
+mod ast;
 mod math_engine;
 use math_engine::{text_analyser, word_to_number};
 
@@ -52,17 +52,16 @@ fn main(){
 
         "Add 5 and -10 and 15 and -20",
         "Multiply 1 1 1 1 1 1",
+        "2 + 5 * 3",
+        "10 + 20 - 5 * 3 / 2",
+        "1 + 2",
 
         "Divide 1 by 3",
         "Divide 1000 by 0.5",
-
-        "Add",
-        "Subtract",
-        "Multiply",
-        "Divide",
-
-        "",
-        "   ",
+        "Add six to the result of subtracting ten from twenty, then multiply by three unless the result is negative",
+        "Add five to the result of subtracting thirty from twenty, then multiply by three unless the result is negative",
+        "10 / 2 / 5",
+        "Add 5 and 10 and 15 and 20 and 25",
     ];
 
      for text in text {

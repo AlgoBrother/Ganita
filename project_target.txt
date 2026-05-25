@@ -9,3 +9,12 @@ Graph using Desmos
 
 TWO DIGIT (DONE)
 MULTIPLE DIGITs NOW
+
+
+WTF_TEST Q1 = "Add five to the result of subtracting ten from twenty, then multiply by three unless the result is negative"
+
+Lexers = Keyword OPerator Identifier
+            
+               NUmber | Add/SUB/MUL/DIV | text symbol?
+
+Parser = Following rules of language grammer
