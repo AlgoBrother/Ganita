@@ -9,10 +9,10 @@ pub enum Expression {
         right: Box<Expression>,
     },
     Conditional {
-        main: Box<Expression>,
+        base: Box<Expression>,
         condition: Condition,
-        alt_op: Operation,
-        alt_expr: Box<Expression>,
+        guarded_op: Option<Operation>,
+        guarded_val: Option<Box<Expression>>, // For future extension: allow conditions like "unless the result is less than 10"
     },
 }
 
@@ -174,19 +174,60 @@ impl Parser {
 
     // ── Top-level entry: parse expression then check for Unless ──────────
     pub fn parse_expression(&mut self) -> Option<Expression> {
-        // An expression is a chain of additive expressions joined by "then"
         let mut expr = self.parse_additive()?;
 
-        // "then <op> ..." continues the chain, wrapping expr as the new left
+        // Collect the "then <op> <val>" if present — but DON'T apply it yet
+        let mut then_op: Option<Operation> = None;
+        let mut then_val: Option<Expression> = None;
+
         while matches!(self.peek(), Some(Token::Then)) {
-            self.consume(); // eat Then
+            self.consume();
             self.skip_fillers();
-            expr = self.parse_then_continuation(expr)?;
+            if let Some(Token::Op(op)) = self.peek().cloned() {
+                self.consume();
+                self.skip_fillers();
+                let val = self.parse_multiplicative()?;
+                then_op = Some(op);
+                then_val = Some(val);
+            }
         }
 
-        // "unless the result is <condition>"
+        // Now check for unless
         if matches!(self.peek(), Some(Token::Unless)) {
-            expr = self.parse_unless(expr)?;
+            self.consume();
+            while matches!(self.peek(),
+                Some(Token::The) | Some(Token::Result) |
+                Some(Token::Is)  | Some(Token::Of)
+            ) { self.consume(); }
+
+            let condition = match self.peek() {
+                Some(Token::Negative) => { self.consume(); Condition::IsNegative }
+                Some(Token::Positive) => { self.consume(); Condition::IsPositive }
+                _ => {
+                    // No recognised condition — apply then_op normally and return
+                    if let (Some(op), Some(val)) = (then_op, then_val) {
+                        expr = Expression::BinOp {
+                            op, left: Box::new(expr), right: Box::new(val)
+                        };
+                    }
+                    return Some(expr);
+                }
+            };
+
+            // Build Conditional with the guarded op stored separately
+            return Some(Expression::Conditional {
+                base: Box::new(expr),
+                condition,
+                guarded_op: then_op,
+                guarded_val: then_val.map(Box::new),
+            });
+        }
+
+        // No unless — apply then_op normally
+        if let (Some(op), Some(val)) = (then_op, then_val) {
+            expr = Expression::BinOp {
+                op, left: Box::new(expr), right: Box::new(val)
+            };
         }
 
         Some(expr)
@@ -262,10 +303,10 @@ impl Parser {
         // Any "then <op> <val>" after the condition sets the alternative
         // Default: when condition met, result becomes 0
         Some(Expression::Conditional {
-            main: Box::new(main),
+            base: Box::new(main),
             condition,
-            alt_op: Operation::Multiply,
-            alt_expr: Box::new(Expression::Number(0.0)),
+            guarded_op: Some(Operation::Multiply),
+            guarded_val: Some(Box::new(Expression::Number(0.0))),
         })
     }
 
@@ -505,19 +546,32 @@ pub fn evaluate(expr: &Expression) -> Result<f64, String> {
             }
         }
 
-        Expression::Conditional { main, condition, alt_op: _, alt_expr: _ } => {
-            let val = evaluate(main)?;
+        Expression::Conditional { base, condition, guarded_op, guarded_val } => {
+            let base_val = evaluate(base)?;
             let condition_met = match condition {
-                Condition::IsNegative => val < 0.0,
-                Condition::IsPositive => val > 0.0,
-                Condition::IsZero     => val == 0.0,
+                Condition::IsNegative => base_val < 0.0,
+                Condition::IsPositive => base_val > 0.0,
+                Condition::IsZero     => base_val == 0.0,
             };
             if condition_met {
-                // Condition met: clamp to 0 for now
-                // TODO: parse and apply the "then <op> <val>" alternative
-                Ok(0.0)
+                Ok(base_val)  // condition fired — skip the guarded op, return base
             } else {
-                Ok(val)
+                // condition not fired — apply the guarded op
+                match (guarded_op, guarded_val) {
+                    (Some(op), Some(val)) => {
+                        let v = evaluate(val)?;
+                        match op {
+                            Operation::Multiply => Ok(base_val * v),
+                            Operation::Add      => Ok(base_val + v),
+                            Operation::Subtract => Ok(base_val - v),
+                            Operation::Divide   => {
+                                if v != 0.0 { Ok(base_val / v) }
+                                else { Err("Division by zero".to_string()) }
+                            }
+                        }
+                    }
+                    _ => Ok(base_val),
+                }
             }
         }
     }
