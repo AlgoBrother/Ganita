@@ -97,23 +97,39 @@ pub fn is_number_word(word: &str) -> bool {
 
 // ========= End of number word conversion functions =======
 
-pub fn text_analyser(text : &str){
+// ========= Main compute function and text analyser for debugging =======
+
+// Inner function to compute the result and also return the AST for debugging purposes. This is used by both the main text_analyser and the compute function (we ignore the ast formation in tests/test results))
+fn compute_inner(text: &str) -> (Option<crate::ast::Expression>, Result<f64, String>) {
     let tokens = crate::ast::tokenize(text);
-    println!("Tokens: {:?}", tokens);
     let mut parser = Parser::new(tokens);
-    match parser.parse_expression(){
+    match parser.parse_expression() {
         Some(ast) => {
-            println!("AST: {:?}", ast);
-            match evaluate(&ast){
-                Ok(result) => {
-                    if result.fract() == 0.0 {
-                        println!("Result: {}", result);
-                    } else {
-                        println!("Result: {:.4}", result);
-                    }
-                } Err(e) => println!("Error: {}", e),
-            }
+            let result = evaluate(&ast);
+            (Some(ast), result)
         }
-        None => println!("Could not parse expression"),
+        None => (None, Err("Could not parse expression".to_string())),
+    }
+}
+
+// This is the main compute function that will be used in tests. It just returns the result and ignores the AST.
+pub fn compute(text: &str) -> Result<f64, String> {
+    let (_, result) = compute_inner(text); // we ignore the AST and just return the result
+    result
+}
+
+// for main.rs shwoing the whole AST and tokens. Compute is made for test cases where we just want the result and not the AST or tokens.
+pub fn text_analyser(text: &str) { 
+    println!("Tokens: {:?}", crate::ast::tokenize(text));
+    let (ast, result) = compute_inner(text);
+    if let Some(ast) = ast {
+        println!("AST: {:?}", ast);
+    }
+    match result {
+        Ok(r) => {
+            if r.fract() == 0.0 { println!("Result: {}", r); }
+            else { println!("Result: {:.4}", r); }
+        }
+        Err(e) => println!("Error: {}", e),
     }
 }

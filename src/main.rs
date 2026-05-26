@@ -1,5 +1,6 @@
 mod ast;
 mod math_engine;
+mod tests; // will add soon
 use math_engine::{text_analyser, word_to_number};
 
 fn main(){
