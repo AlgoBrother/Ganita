@@ -2,8 +2,6 @@ use std::result;
 
 use crate::ast::{Parser, evaluate};
 
-// I will be using f64 for precision and to handl some future tests withfloating point i have in mind.
-
 
 // ======= Number word conversion functions =======
 pub fn word_value(word: &str) -> Option<f64>{
@@ -77,11 +75,34 @@ pub fn is_number_word(word: &str) -> bool {
 
 // ========= End of number word conversion functions =======
 
+// ========= Normaliser =======
+pub fn normalise(text: &str) -> String {
+    let mut result = text.to_string();
+
+    // normalize english phrases
+    result = result.replace("to the power of", "^");
+      result = result.replace("to power of", "^");
+
+    // add spaces around operators
+    for op in ["*", "/", "^", "(", ")"] {
+        result = result.replace(op, &format!(" {} ", op));
+    }
+
+    // collapse duplicate spaces
+    result = result
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    result
+}
+
 // ========= Main compute function and text analyser for debugging =======
 
 // Inner function to compute the result and also return the AST for debugging purposes. This is used by both the main text_analyser and the compute function (we ignore the ast formation in tests/test results))
 fn compute_inner(text: &str) -> (Option<crate::ast::Expression>, Result<f64, String>) {
-    let tokens = crate::ast::tokenize(text);
+    let normalised_text = &normalise(text);
+    let tokens = crate::ast::tokenize(normalised_text);
     let mut parser = Parser::new(tokens);
     match parser.parse_expression() {
         Some(ast) => {
@@ -100,7 +121,8 @@ pub fn compute(text: &str) -> Result<f64, String> {
 
 // for main.rs shwoing the whole AST and tokens. Compute is made for test cases where we just want the result and not the AST or tokens.
 pub fn text_analyser(text: &str) { 
-    println!("Tokens: {:?}", crate::ast::tokenize(text));
+    let normalised_text = &normalise(text);
+    println!("Tokens: {:?}", crate::ast::tokenize(normalised_text));
     let (ast, result) = compute_inner(text);
     if let Some(ast) = ast {
         println!("AST: {:?}", ast);
