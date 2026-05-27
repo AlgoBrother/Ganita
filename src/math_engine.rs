@@ -3,27 +3,7 @@ use std::result;
 use crate::ast::{Parser, evaluate};
 
 // I will be using f64 for precision and to handl some future tests withfloating point i have in mind.
-fn add(numbers: &[f64]) -> f64 {
-    numbers.iter().map(|&n| n).sum()
-}
 
-fn subtract(numbers: &[f64]) -> f64 {
-    // subtraction operation
-    let first = numbers[0];
-    numbers[1..].iter().fold(first, |acc, &n| acc - n)
-}
-
-fn multiply(numbers: &[f64]) -> f64 {
-    numbers.iter().product() 
-}
-
-fn divide(a: f64, b: f64) -> Option<f64> {
-    if b != 0.0 {
-        Some(a / b)
-    } else {
-        None
-    }
-}
 
 // ======= Number word conversion functions =======
 pub fn word_value(word: &str) -> Option<f64>{
