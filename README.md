@@ -13,6 +13,7 @@ Basic Statements
 - Add five and six
 - Subtract 40 from 20
 - Multiply 4 with result of 7 * 7
+- 2 ^ 3 ^ 4 [Exponents succesful with rigjt associativity]
   
 Conditional Statements
 - Add six to the result of subtracting ten from twenty, then multiply by three unless the result is negative
@@ -21,5 +22,5 @@ Conditional Statements
 [IN WORK] 
 
 - Comparing statements (will be used for conditional tetsing as well)
-- Exponential (Almost done, will be next update.)
+
 - Parentheisis testing
