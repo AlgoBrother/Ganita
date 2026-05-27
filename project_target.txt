@@ -13,6 +13,8 @@ MULTIPLE DIGITs NOW
 
 WTF_TEST Q1 = "Add five to the result of subtracting ten from twenty, then multiply by three unless the result is negative"
 
+TARGET_EXPONENT = "Cube of 3 plus 5", "2 sqaured", "n^0 = 1", "Square of sum of 4 and 5, multiply the result by 10", "Square of sum of 4 and 5, multiply the result by 10 if reuslt is grater than 100 else divide by the sqaure of 1plus 2"
+
 Lexers = Keyword OPerator Identifier
             
                NUmber | Add/SUB/MUL/DIV | text symbol?

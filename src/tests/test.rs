@@ -73,6 +73,20 @@ mod tests {
     #[test]
     fn test_float_divisor(){ assert_eq!(compute("Divide 1000 by 0.5"), Ok(2000.0)); }
 
+    // ── exponents ───────────────────────────────────────────────
+
+    #[test]
+    fn test_expon1(){
+        assert_eq!(compute("2 ^ 3 ^ 4"), Ok(2.0_f64.powf((3.0_f64).powf(4.0))));
+    }
+
+       #[test]
+    fn test_expon2(){
+        assert_eq!(compute("10 to the power of 5"), Ok(100000.0));
+    }
+
+
+
     // ── errors ───────────────────────────────────────────────
 
     #[test]

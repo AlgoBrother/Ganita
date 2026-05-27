@@ -56,6 +56,7 @@ fn main(){
         "2 + 5 * 3",
         "10 + 20 - 5 * 3 / 2",
         "1 + 2",
+        "Multiply 4 by result of 7 * 7",
 
         "Divide 1 by 3",
         "Divide 1000 by 0.5",
@@ -63,6 +64,10 @@ fn main(){
         "Add five to the result of subtracting thirty from twenty, then multiply by three unless the result is negative",
         "10 / 2 / 5",
         "Add 5 and 10 and 15 and 20 and 25",
+        "2 ^ 3 ^ 4",
+        "10 ^ 2",
+        "10^2",
+        "2 to the power of 10",
     ];
 
      for text in text {

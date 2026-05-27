@@ -29,6 +29,7 @@ pub enum Operation {
     Subtract,
     Multiply,
     Divide,
+    Power, // Exponent
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +48,8 @@ pub enum Token {
     Is,
     Negative,
     Positive,
+    LParenthesis,
+    RParenthesis,
 }
 
 // ──────────────────────────────────────────────
@@ -74,6 +77,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             "-" => { tokens.push(Token::Op(Operation::Subtract)); i += 1; continue; }
             "*" => { tokens.push(Token::Op(Operation::Multiply)); i += 1; continue; }
             "/" => { tokens.push(Token::Op(Operation::Divide));   i += 1; continue; }
+            "^" => { tokens.push(Token::Op(Operation::Power));    i += 1; continue; }
             _ => {}
         }
 
@@ -88,6 +92,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             "subtract" | "subtracting" | "minus"     => tokens.push(Token::Op(Operation::Subtract)),
             "multiply" | "multiplying" | "times"     => tokens.push(Token::Op(Operation::Multiply)),
             "divide" | "dividing" | "over"           => tokens.push(Token::Op(Operation::Divide)),
+            "power" | "exponent"                     => tokens.push(Token::Op(Operation::Power)),
             "from"     => tokens.push(Token::From),
             "by"       => tokens.push(Token::By),
             "and"      => tokens.push(Token::And),
@@ -100,6 +105,8 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             "is"       => tokens.push(Token::Is),
             "negative" => tokens.push(Token::Negative),
             "positive" => tokens.push(Token::Positive),
+            "("   | "[" | "{"     => tokens.push(Token::LParenthesis),
+            ")"   | "]" | "}"     => tokens.push(Token::RParenthesis),
             _ => {
                 // ── Step 3: try to parse as a number (handles -5, 3.14, etc.)
                 if let Ok(num) = word.parse::<f64>() {
@@ -361,14 +368,14 @@ impl Parser {
 
     // multiplicative: handles infix * and /
     fn parse_multiplicative(&mut self) -> Option<Expression> {
-        let mut left = self.parse_primary()?;
+        let mut left = self.parse_power()?; // ← fix: was parse_primary(), now we allow powers to be nested inside mul/div
 
         loop {
             match self.peek() {
                 Some(Token::Op(Operation::Multiply)) => {
                     self.consume();
                     self.skip_fillers();
-                    let right = self.parse_primary()?;
+                    let right = self.parse_power()?;
                     left = Expression::BinOp {
                         op: Operation::Multiply,
                         left: Box::new(left),
@@ -378,7 +385,7 @@ impl Parser {
                 Some(Token::Op(Operation::Divide)) => {
                     self.consume();
                     self.skip_fillers();
-                    let right = self.parse_primary()?;
+                    let right = self.parse_power()?;
                     left = Expression::BinOp {
                         op: Operation::Divide,
                         left: Box::new(left),
@@ -387,6 +394,27 @@ impl Parser {
                 }
                 _ => break,
             }
+        }
+        Some(left)
+    }
+
+    // handles ^ with right-associativity
+    fn parse_power(&mut self) -> Option<Expression> {
+        let mut left = self.parse_primary()?;
+
+        loop{
+            // Since Exponentiation is right-associative, we don't want to loop here like the others.
+            // Instead, we check for the power operator and if it's there, we consume it and parse the right
+            if matches!(self.peek(), Some(Token::Op(Operation::Power))) {
+                self.consume();
+                self.skip_fillers();
+                let right = self.parse_power()?; // recursive call to handle right-associativity
+                left = Expression::BinOp {
+                    op: Operation::Power,
+                    left: Box::new(left),
+                    right: Box::new(right),
+                };
+            } else { break; }
         }
         Some(left)
     }
@@ -543,6 +571,7 @@ pub fn evaluate(expr: &Expression) -> Result<f64, String> {
                     if r != 0.0 { Ok(l / r) }
                     else { Err("Error: Division by zero".to_string()) }
                 }
+                Operation::Power    => Ok(l.powf(r)),
             }
         }
 
@@ -568,6 +597,7 @@ pub fn evaluate(expr: &Expression) -> Result<f64, String> {
                                 if v != 0.0 { Ok(base_val / v) }
                                 else { Err("Division by zero".to_string()) }
                             }
+                            Operation::Power    => Ok(base_val.powf(v)),
                         }
                     }
                     _ => Ok(base_val),
