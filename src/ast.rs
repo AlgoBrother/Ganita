@@ -1,19 +1,27 @@
-use crate::math_engine::{word_to_number, is_number_word};
+use crate::{ast::Token::{LParenthesis, Op, Then}, math_engine::{is_number_word, word_to_number}};
 
 #[derive(Debug, Clone)]
 pub enum Expression {
     Number(f64),
+
     BinOp {
         op: Operation,
         left: Box<Expression>,
         right: Box<Expression>,
     },
+
     Conditional {
         base: Box<Expression>,
         condition: Condition,
         guarded_op: Option<Operation>,
         guarded_val: Option<Box<Expression>>, // For future extension: allow conditions like "unless the result is less than 10"
     },
+
+    Comparison {
+        op: CompareOp,
+        left: Box<Expression>,
+        right: Box<Expression>,
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -21,6 +29,11 @@ pub enum Condition {
     IsNegative,
     IsPositive,
     IsZero,
+    Comparison{
+        op: CompareOp,
+        threshold: f64, // the threshold value for the comparison 
+        polarity: bool // true for "greater than", false for "less than"
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -33,8 +46,25 @@ pub enum Operation {
 }
 
 #[derive(Debug, Clone)]
+pub enum CompareOp {
+    GreaterThan,
+    LessThan,
+    EqualTo,
+    NotEqualTo,
+    GreaterThanOrEqualTo,
+    LessThanOrEqualTo,
+}
+
+#[derive(Debug, Clone)]
+pub enum CompareResult {
+    Number(f64),
+    ConditionMet(bool),
+}
+
+#[derive(Debug, Clone)]
 pub enum Token {
     Op(Operation),
+    Cmp(CompareOp),
     Number(f64),
     From,
     By,
@@ -46,6 +76,7 @@ pub enum Token {
     Of,
     Unless,
     Is,
+    If,
     Negative,
     Positive,
     LParenthesis,
@@ -78,6 +109,14 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             "*" => { tokens.push(Token::Op(Operation::Multiply)); i += 1; continue; }
             "/" => { tokens.push(Token::Op(Operation::Divide));   i += 1; continue; }
             "^" => { tokens.push(Token::Op(Operation::Power));    i += 1; continue; }
+            "(" | "[" | "{" => { tokens.push(Token::LParenthesis); i += 1; continue; }
+            ")" | "]" | "}" => { tokens.push(Token::RParenthesis); i += 1; continue; }
+            "<"  => { tokens.push(Token::Cmp(CompareOp::LessThan)); i += 1; continue; }
+            ">"  => { tokens.push(Token::Cmp(CompareOp::GreaterThan));i += 1; continue; }
+            "="  => { tokens.push(Token::Cmp(CompareOp::EqualTo)); i += 1; continue; }
+            "!=" => { tokens.push(Token::Cmp(CompareOp::NotEqualTo)); i += 1; continue; }
+            "<=" => { tokens.push(Token::Cmp(CompareOp::LessThanOrEqualTo)); i += 1; continue; }
+            ">=" => { tokens.push(Token::Cmp(CompareOp::GreaterThanOrEqualTo)); i += 1; continue; }
             _ => {}
         }
 
@@ -105,8 +144,61 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             "is"       => tokens.push(Token::Is),
             "negative" => tokens.push(Token::Negative),
             "positive" => tokens.push(Token::Positive),
-            "("   | "[" | "{"     => tokens.push(Token::LParenthesis),
-            ")"   | "]" | "}"     => tokens.push(Token::RParenthesis),
+            "if"  | "when"    => tokens.push(Token::If),
+            // "("   | "[" | "{"     => tokens.push(Token::LParenthesis),
+            // ")"   | "]" | "}"     => tokens.push(Token::RParenthesis),
+            "greater"  | "more" => {
+                // peek: is next word "than"?
+                if raw.get(i + 1).map(|s| s.to_lowercase()) == Some("than".to_string()) {
+                    // peek again: is it ">= " (greater than or equal to)?
+                    if raw.get(i + 2).map(|s| s.to_lowercase()) == Some("or".to_string()){
+                        tokens.push(Token::Cmp(CompareOp::GreaterThanOrEqualTo));
+                        i += 5; // skip "than or equal to"
+                    } else{
+                        tokens.push(Token::Cmp(CompareOp::GreaterThan));
+                        i += 2; // skip "than"
+                    }
+                } else{
+                    tokens.push(Token::Cmp(CompareOp::GreaterThan));
+                    i += 1;
+                }
+                continue;
+            },
+
+            "less" | "fewer" | "smaller" => {
+                if raw.get(i  +1).map(|s| s.to_lowercase()) == Some("than".to_string()){
+                    if raw.get(i + 2).map(|s| s.to_lowercase()) == Some("or".to_string()){
+                        tokens.push(Token::Cmp(CompareOp::LessThanOrEqualTo));
+                        i += 5; // skip "than or equal to"
+                    }else{
+                        tokens.push(Token::Cmp(CompareOp::LessThan));
+                        i += 2; // skip "than"
+                    }
+                } else{
+                    tokens.push(Token::Cmp(CompareOp::LessThan));
+                    i += 1;
+                }
+                continue;
+            },
+
+            "equal" | "equals" => {
+                // skip optional "to"
+                let skip = if raw.get(i + 1).map(|s| s.to_lowercase()) == Some("to".to_string()) { 2 } else { 1 };
+                tokens.push(Token::Cmp(CompareOp::EqualTo));
+                i += skip;
+                continue;
+            },
+
+            "not" => {
+                // "not equal to"
+                if raw.get(i + 1).map(|s| s.to_lowercase()) == Some("equal".to_string()) {
+                    tokens.push(Token::Cmp(CompareOp::NotEqualTo));
+                    i += if raw.get(i + 2).map(|s| s.to_lowercase()) == Some("to".to_string()) { 3 } else { 2 };
+                } else {
+                    i += 1; // unknown "not", skip
+                }
+                continue;
+            },
             _ => {
                 // ── Step 3: try to parse as a number (handles -5, 3.14, etc.)
                 if let Ok(num) = word.parse::<f64>() {
@@ -181,7 +273,7 @@ impl Parser {
 
     // ── Top-level entry: parse expression then check for Unless ──────────
     pub fn parse_expression(&mut self) -> Option<Expression> {
-        let mut expr = self.parse_additive()?;
+        let mut expr = self.parse_comparison()?;
 
         // Collect the "then <op> <val>" if present — but DON'T apply it yet
         let mut then_op: Option<Operation> = None;
@@ -189,8 +281,8 @@ impl Parser {
 
         while matches!(self.peek(), Some(Token::Then)) {
             self.consume();
-            self.skip_fillers();
-            if let Some(Token::Op(op)) = self.peek().cloned() {
+            self.skip_fillers(); 
+            if let Some(Token::Op(op)) = self.peek().cloned() { 
                 self.consume();
                 self.skip_fillers();
                 let val = self.parse_multiplicative()?;
@@ -199,47 +291,67 @@ impl Parser {
             }
         }
 
-        // Now check for unless
-        if matches!(self.peek(), Some(Token::Unless)) {
-            self.consume();
-            while matches!(self.peek(),
-                Some(Token::The) | Some(Token::Result) |
-                Some(Token::Is)  | Some(Token::Of)
-            ) { self.consume(); }
-
-            let condition = match self.peek() {
-                Some(Token::Negative) => { self.consume(); Condition::IsNegative }
-                Some(Token::Positive) => { self.consume(); Condition::IsPositive }
-                _ => {
-                    // No recognised condition — apply then_op normally and return
-                    if let (Some(op), Some(val)) = (then_op, then_val) {
-                        expr = Expression::BinOp {
-                            op, left: Box::new(expr), right: Box::new(val)
-                        };
-                    }
-                    return Some(expr);
+        let polarity = match self.peek() {
+            Some(Token::If) => {self.consume(); true}
+            Some(Token::Unless) => {self.consume(); false}
+            _ => {
+                if let(Some(op), Some(val)) = (then_op, then_val) {
+                    expr = Expression::BinOp {
+                        op, left: Box::new(expr), right: Box::new(val)
+                    };
                 }
-            };
+                return Some(expr);
+            }
+        };
 
-            // Build Conditional with the guarded op stored separately
-            return Some(Expression::Conditional {
-                base: Box::new(expr),
-                condition,
-                guarded_op: then_op,
-                guarded_val: then_val.map(Box::new),
-            });
-        }
+        while matches!(self.peek(),
+            Some(Token::The) | Some(Token::Result) |
+            Some(Token::Is)  | Some(Token::Of)
+        ) { self.consume(); }
 
-        // No unless — apply then_op normally
-        if let (Some(op), Some(val)) = (then_op, then_val) {
-            expr = Expression::BinOp {
-                op, left: Box::new(expr), right: Box::new(val)
-            };
-        }
+        // check for simple conditions first
+        let condition = match self.peek() {
+            Some(Token::Negative) => { self.consume(); Condition::IsNegative }
+            Some(Token::Positive) => { self.consume(); Condition::IsPositive }
+            Some(Token::Cmp(_))   => {
+                // comparison condition: "if result is >= 900"
+                if let Some(Token::Cmp(op)) = self.peek().cloned() {
+                    self.consume();
+                    self.skip_fillers();
+                    // the threshold value
+                    if let Some(Expression::Number(threshold)) = self.parse_primary() {
+                        Condition::Comparison { op, threshold, polarity }
+                    } else {
+                        // can't parse threshold, bail
+                        if let (Some(op), Some(val)) = (then_op, then_val) {
+                            expr = Expression::BinOp {
+                                op, left: Box::new(expr), right: Box::new(val)
+                            };
+                        }
+                        return Some(expr);
+                    }
+                } else { return Some(expr); }
+            }
+            _ => {
+                if let (Some(op), Some(val)) = (then_op, then_val) {
+                    expr = Expression::BinOp {
+                        op, left: Box::new(expr), right: Box::new(val)
+                    };
+                }
+                return Some(expr);
+            }
+        };
 
-        Some(expr)
+        Some(Expression::Conditional {
+            base: Box::new(expr),
+            condition,
+            guarded_op: then_op,
+            guarded_val: then_val.map(Box::new),
+        })
     }
+        
 
+        // No unless — apply then_op normall
     // After "then", we expect an infix or prefix operation applied to the
     // accumulated expression so far as the implicit left operand.
     // "then multiply by 3"  → Mul(expr, 3)
@@ -419,6 +531,24 @@ impl Parser {
         Some(left)
     }
 
+    // compare logic
+    fn parse_comparison(&mut self) -> Option<Expression> {
+        let left = self.parse_additive()?;
+        self.skip_fillers();
+        if let Some(Token::Cmp(cmp_op)) = self.peek().cloned() {
+            self.consume();
+            self.skip_fillers();
+            let right = self.parse_additive()?;
+            Some(Expression::Comparison {
+                op: cmp_op,
+                left: Box::new(left),
+                right: Box::new(right),
+            })
+        } else {
+            Some(left) // no comparison, return the additive expression
+        }
+    }
+    
     // rhs: right-hand side that may be introduced by "the result of <sub-expr>"
     fn parse_rhs(&mut self) -> Option<Expression> {
         self.skip_fillers();
@@ -485,6 +615,18 @@ impl Parser {
                 self.parse_primary()
             }
 
+            // Parenthesised sub-expression
+            Token::LParenthesis => {
+                self.consume(); 
+                let expression = self.parse_additive(); // allow full additive expressions inside parentheses
+                if matches!(self.peek(), Some(Token::RParenthesis)){ // check for closing parenthesis
+                    self.consume();
+                    expression
+                } else {
+                    None // unbalanced parentheses
+                }
+            }
+
             _ => None,
         }
     }
@@ -545,7 +687,8 @@ impl Parser {
         match self.peek() {
             Some(Token::And)
             | Some(Token::To)
-            | Some(Token::By) => { self.consume(); }  // ← removed The/Result/Of
+            | Some(Token::By)
+            | Some(Token::Is) => { self.consume(); }  // ← removed The/Result/Of
             _ => break,
         }
     }
@@ -577,31 +720,67 @@ pub fn evaluate(expr: &Expression) -> Result<f64, String> {
 
         Expression::Conditional { base, condition, guarded_op, guarded_val } => {
             let base_val = evaluate(base)?;
-            let condition_met = match condition {
-                Condition::IsNegative => base_val < 0.0,
-                Condition::IsPositive => base_val > 0.0,
-                Condition::IsZero     => base_val == 0.0,
+
+            let should_apply_guarded_op = match condition {
+                Condition::IsNegative => base_val >= 0.0,  // apply when NOT negative
+                Condition::IsPositive => base_val <= 0.0,  // apply when NOT positive
+                Condition::IsZero     => base_val != 0.0,  // apply when NOT zero
+                Condition::Comparison { op, threshold, polarity } => {
+                    let raw = match op {
+                        CompareOp::GreaterThan          => base_val > *threshold,
+                        CompareOp::LessThan             => base_val < *threshold,
+                        CompareOp::EqualTo              => (base_val - threshold).abs() < 1e-9,
+                        CompareOp::NotEqualTo           => (base_val - threshold).abs() >= 1e-9,
+                        CompareOp::GreaterThanOrEqualTo => base_val >= *threshold,
+                        CompareOp::LessThanOrEqualTo    => base_val <= *threshold,
+                    };
+                    // "if"     (polarity=true)  → apply when raw is true
+                    // "unless" (polarity=false) → apply when raw is false
+                    if *polarity { raw } else { !raw }
+                }
             };
-            if condition_met {
-                Ok(base_val)  // condition fired — skip the guarded op, return base
-            } else {
-                // condition not fired — apply the guarded op
+
+            if should_apply_guarded_op {
+                // condition says yes — apply the guarded operation
                 match (guarded_op, guarded_val) {
                     (Some(op), Some(val)) => {
                         let v = evaluate(val)?;
                         match op {
-                            Operation::Multiply => Ok(base_val * v),
                             Operation::Add      => Ok(base_val + v),
                             Operation::Subtract => Ok(base_val - v),
+                            Operation::Multiply => Ok(base_val * v),
                             Operation::Divide   => {
                                 if v != 0.0 { Ok(base_val / v) }
-                                else { Err("Division by zero".to_string()) }
+                                else { Err("Division by zero in conditional".to_string()) }
                             }
                             Operation::Power    => Ok(base_val.powf(v)),
                         }
                     }
                     _ => Ok(base_val),
                 }
+            } else {
+                // condition says no — return base unchanged
+                Ok(base_val)
+            }
+        }
+
+        Expression::Comparison { op, left, right } => {
+            let l = evaluate(left);
+            let r = evaluate(right);
+            match (l, r) {
+                (Ok(lv), Ok(rv)) => {
+                    let result = match op {
+                        CompareOp::GreaterThan => lv > rv,
+                        CompareOp::LessThan => lv < rv,
+                        CompareOp::EqualTo => (lv - rv).abs() < 1e-9, // handle floating-point equality with a tolerance we do this instead of == to avoid issues where two numbers are mathematically equal but differ in their last decimal places due to floating-point precision limitations
+                        CompareOp::NotEqualTo => (lv - rv).abs() >= 1e-9, 
+                        CompareOp::GreaterThanOrEqualTo => lv >= rv,
+                        CompareOp::LessThanOrEqualTo => lv <= rv,
+                    };
+                    Ok(result as u8 as f64) // return 1.0 for true, 0.0 for false
+                }
+                
+                (Err(e), _) | (_, Err(e)) => Err(e),
             }
         }
     }

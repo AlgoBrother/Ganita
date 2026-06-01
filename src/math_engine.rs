@@ -51,22 +51,24 @@ pub fn word_to_number(word: &str) -> Option<f64> {
     let mut current = 0.0;
 
     for part in word.split_whitespace() {
-        if let Some(value) = word_value(part)  {
+        if let Some(value) = word_value(part) {
             if value == 100.0 {
+                if current == 0.0 { current = 1.0; } // "hundred" alone
                 current *= 100.0;
             } else if value >= 1000.0 {
+                if current == 0.0 { current = 1.0; } // "thousand" alone
                 total += current * value;
                 current = 0.0;
             } else {
                 current += value;
             }
         } else {
-            return None; // Return None if any part is not a valid number word
+            return None;
         }
     }
 
     total += current;
-    Some(total) as Option<f64>
+    Some(total)
 }
 
 pub fn is_number_word(word: &str) -> bool {

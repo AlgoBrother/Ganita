@@ -85,6 +85,23 @@ mod tests {
         assert_eq!(compute("10 to the power of 5"), Ok(100000.0));
     }
 
+     // ── comparison ───────────────────────────────────────────────
+
+    #[test]
+    fn test_comparison_equal() {
+        assert_eq!(compute("3 = 3"), Ok(1.0));
+    }
+
+    #[test]
+    fn test_comparison_greater() {
+        assert_eq!(compute("10 is greater than 4"), Ok(1.0));
+    }
+
+    #[test]
+    fn test_comparison_lower() {
+        assert_eq!(compute("10 is less than 4"), Ok(0.0));
+    }
+
 
 
     // ── errors ───────────────────────────────────────────────
@@ -110,6 +127,12 @@ mod tests {
     fn test_wtf_negative() {
         // 5 + (20-30) = -5, is negative → return -5
         assert_eq!(compute("Add five to the result of subtracting thirty from twenty, then multiply by three unless the result is negative"), Ok(-5.0));
+    }
+
+    #[test]
+    fn test_wtf_comparison() {
+        // 67 + (1000-100) = 967, not >= 900 → 967 * 3 = 2901
+        assert_eq!(compute("Add sixty seven to the result of subtracting hundred from thousand, then multiply it by three if the result is greater than  or equal to 900."), Ok(2901.0));
     }
 }
 

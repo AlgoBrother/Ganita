@@ -68,6 +68,10 @@ fn main(){
         "10 ^ 2",
         "10^2",
         "2 to the power of 10",
+        "(1 + 2) * (3 + (4 * 3))",
+        "3 = 3",
+        "2 is greater than 4",
+        "Add sixty seven to the result of subtracting hundred from thousand, then multiply it by three if the result is greater than  or equal to 900.",
     ];
 
      for text in text {

@@ -13,14 +13,17 @@ Basic Statements
 - Add five and six
 - Subtract 40 from 20
 - Multiply 4 with result of 7 * 7
-- 2 ^ 3 ^ 4 [Exponents succesful with rigjt associativity]
+- 2 ^ 3 ^ 4 [Exponents successful with right associativity]
+- Parenthesis working. 
+- Comparsion Statements are working
   
 Conditional Statements
 - Add six to the result of subtracting ten from twenty, then multiply by three unless the result is negative
 - Add six to the result of subtracting thirty from twenty, then multiply by three unless the result is negative
+- Add sixty seven to the result of subtracting hundred from thousand, then multiply it by three if the result is greater than  or equal to 900.
+
 
 [IN WORK] 
 
-- Comparing statements (will be used for conditional tetsing as well)
+- Trignometry
 
-- Parentheisis testing
