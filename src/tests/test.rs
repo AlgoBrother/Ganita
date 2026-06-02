@@ -134,6 +134,67 @@ mod tests {
         // 67 + (1000-100) = 967, not >= 900 → 967 * 3 = 2901
         assert_eq!(compute("Add sixty seven to the result of subtracting hundred from thousand, then multiply it by three if the result is greater than  or equal to 900."), Ok(2901.0));
     }
+
+    #[test]
+fn test_the_zero_behavior() {
+    // Ensures multiplying by text-based zero doesn't break evaluation
+    assert_eq!(compute("Multiply zero by one hundred"), Ok(0.0));
+}
+
+#[test]
+fn test_conditional_scoping() {
+    // Does "unless" scope back to the very beginning, or just the immediate previous action?
+    // (5 + 5) * 2 unless ... -> 20
+    // If it fails: 5 + (5 * 2) -> 15
+    assert_eq!(compute("Add five and five then multiply by two unless the result is less than zero"), Ok(20.0));
+}
+
+#[test]
+fn test_nested_conditionals() {
+    // Double condition processing!
+    // 10 - 20 = -10 (is negative, so skip "multiply by three") -> -10
+    // Then check next condition: is -10 less than zero? Yes! -> multiply by -1 -> 10.0
+    assert_eq!(compute("Subtract twenty from ten then multiply by three unless the result is negative, then multiply by -1 if the result is less than zero"), Ok(10.0));
+}
+
+#[test]
+fn test_false_conditionals() {
+    // 50 - 20 = 30. Is 30 less than 10? No. 
+    // The "then multiply by 2" should be entirely skipped. 
+    assert_eq!(compute("Subtract twenty from fifty, then multiply by two if the result is less than ten"), Ok(30.0));
+}
+
+#[test]
+fn test_multi_operand_precedence() {
+    // Does it do (100 - 20 - 5) * 2 = 150? Or does * 2 only apply to the last element?
+    assert_eq!(compute("Subtract 100 20 5 * 2"), Ok(150.0)); 
+}
+
+#[test]
+fn test_mixed_word_and_symbol_precedence() {
+    // Tests if "Multiply" captures everything, or respects standard BODMAS mid-sentence
+    // 4 * (6 + 2) = 32 vs (4 * 6) + 2 = 26
+    assert_eq!(compute("Multiply 4 by 6 + 2"), Ok(32.0)); 
+}
+
+#[test]
+fn test_word_number_collisions() {
+    // "one" is part of "one hundred", but "one" is also standalone. 
+    // "then" contains "ten". Does your lexer separate "then" into "ten"?
+    assert_eq!(compute("Add ten then subtract two"), Ok(8.0)); 
+}
+
+#[test]
+fn test_hyphenated_and_unspaced_numbers() {
+    // Checking if your word-to-number engine needs exact spaces or handles natural variations
+    assert_eq!(compute("Add twenty-one and thirty-two"), Ok(53.0));
+}
+
+#[test]
+fn test_double_negatives() {
+    // "Subtract minus five" -> minus minus five -> + 5
+    assert_eq!(compute("Subtract minus five from ten"), Ok(15.0));
+}
 }
 
 // TEST RESULTS :  test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

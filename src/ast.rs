@@ -83,15 +83,8 @@ pub enum Token {
     RParenthesis,
 }
 
-// ──────────────────────────────────────────────
+
 // TOKENIZER
-// ──────────────────────────────────────────────
-//
-// Symbol handling strategy:
-//   Trim punctuation EXCEPT when the whole word is a known symbol (+,-,*,/)
-//   or when it's a negative number (-5).
-//   We do NOT use trim_matches for operator detection — instead we check the
-//   raw word first, then trim for number parsing.
 
 pub fn tokenize(input: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
@@ -128,7 +121,25 @@ pub fn tokenize(input: &str) -> Vec<Token> {
 
         match word.as_str() {
             "add"  | "plus"  | "adding"              => tokens.push(Token::Op(Operation::Add)),
-            "subtract" | "subtracting" | "minus"     => tokens.push(Token::Op(Operation::Subtract)),
+            "subtract" | "subtracting"  => tokens.push(Token::Op(Operation::Subtract)),
+            "minus" => {
+                // peek: is next word "from"? If so, it's a subtraction, not a negative number
+                if let Some(next) = raw.get(i + 1) {
+                    let next_lower = next.trim_matches(|c: char| c == ',' || c == '?').to_lowercase();
+                    if let Ok(num) = next_lower.parse::<f64>() {  
+                        tokens.push(Token::Number(-num));
+                        i += 2;
+                        continue;
+                    } else if is_number_word(&next_lower) {
+                        if let Some(num) = word_to_number(&next_lower) {
+                            tokens.push(Token::Number(-num));
+                            i += 2;
+                            continue;
+                        }
+                    }
+                }
+                tokens.push(Token::Op(Operation::Subtract));
+            },
             "multiply" | "multiplying" | "times"     => tokens.push(Token::Op(Operation::Multiply)),
             "divide" | "dividing" | "over"           => tokens.push(Token::Op(Operation::Divide)),
             "power" | "exponent"                     => tokens.push(Token::Op(Operation::Power)),
@@ -200,28 +211,40 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 continue;
             },
             _ => {
-                // ── Step 3: try to parse as a number (handles -5, 3.14, etc.)
                 if let Ok(num) = word.parse::<f64>() {
                     tokens.push(Token::Number(num));
-                } else if is_number_word(&word) {
-                    // ── Step 4: greedily consume multi-word number phrase
-                    let mut phrase = word.clone();
-                    loop {
-                        if i + 1 >= raw.len() { break; }
-                        let next = raw[i + 1]
-                            .trim_matches(|c: char| c == ',' || c == '!' || c == '?')
-                            .to_lowercase();
-                        if !is_number_word(&next) { break; }
-                        let candidate = format!("{} {}", phrase, next);
-                        if word_to_number(&candidate).is_some() {
-                            phrase = candidate;
-                            i += 1;
-                        } else {
-                            break;
+                } else {
+                    // for number words ("twenty-one" -> "twenty one"), we replace hyphens with spaces and check if it's a valid number word or phrase
+                    let word = word.replace('-', " ");
+                    let word = word.trim();
+
+                    if is_number_word(word) || word.contains(' ') {
+                        let mut phrase = word.to_string();
+
+                        loop {
+                            if i + 1 >= raw.len() { break; }
+
+                            let next = raw[i + 1]
+                                .trim_matches(|c: char| c == ',' || c == '!' || c == '?')
+                                .to_lowercase();
+
+                            if !is_number_word(&next) {
+                                break;
+                            }
+
+                            let candidate = format!("{} {}", phrase, next);
+
+                            if word_to_number(&candidate).is_some() {
+                                phrase = candidate;
+                                i += 1;
+                            } else {
+                                break;
+                            }
                         }
-                    }
-                    if let Some(num) = word_to_number(&phrase) {
-                        tokens.push(Token::Number(num));
+
+                        if let Some(num) = word_to_number(&phrase) {
+                            tokens.push(Token::Number(num));
+                        }
                     }
                 }
                 // unknown words silently skipped
@@ -275,83 +298,83 @@ impl Parser {
     pub fn parse_expression(&mut self) -> Option<Expression> {
         let mut expr = self.parse_comparison()?;
 
-        // Collect the "then <op> <val>" if present — but DON'T apply it yet
-        let mut then_op: Option<Operation> = None;
-        let mut then_val: Option<Expression> = None;
+        loop {  // ← loop so nested conditionals chain
+            let mut then_op: Option<Operation> = None;
+            let mut then_val: Option<Expression> = None;
 
-        while matches!(self.peek(), Some(Token::Then)) {
-            self.consume();
-            self.skip_fillers(); 
-            if let Some(Token::Op(op)) = self.peek().cloned() { 
+            while matches!(self.peek(), Some(Token::Then)) {
                 self.consume();
                 self.skip_fillers();
-                let val = self.parse_multiplicative()?;
-                then_op = Some(op);
-                then_val = Some(val);
-            }
-        }
-
-        let polarity = match self.peek() {
-            Some(Token::If) => {self.consume(); true}
-            Some(Token::Unless) => {self.consume(); false}
-            _ => {
-                if let(Some(op), Some(val)) = (then_op, then_val) {
-                    expr = Expression::BinOp {
-                        op, left: Box::new(expr), right: Box::new(val)
-                    };
-                }
-                return Some(expr);
-            }
-        };
-
-        while matches!(self.peek(),
-            Some(Token::The) | Some(Token::Result) |
-            Some(Token::Is)  | Some(Token::Of)
-        ) { self.consume(); }
-
-        // check for simple conditions first
-        let condition = match self.peek() {
-            Some(Token::Negative) => { self.consume(); Condition::IsNegative }
-            Some(Token::Positive) => { self.consume(); Condition::IsPositive }
-            Some(Token::Cmp(_))   => {
-                // comparison condition: "if result is >= 900"
-                if let Some(Token::Cmp(op)) = self.peek().cloned() {
+                if let Some(Token::Op(op)) = self.peek().cloned() {
                     self.consume();
                     self.skip_fillers();
-                    // the threshold value
-                    if let Some(Expression::Number(threshold)) = self.parse_primary() {
-                        Condition::Comparison { op, threshold, polarity }
-                    } else {
-                        // can't parse threshold, bail
-                        if let (Some(op), Some(val)) = (then_op, then_val) {
-                            expr = Expression::BinOp {
-                                op, left: Box::new(expr), right: Box::new(val)
-                            };
-                        }
-                        return Some(expr);
-                    }
-                } else { return Some(expr); }
-            }
-            _ => {
-                if let (Some(op), Some(val)) = (then_op, then_val) {
-                    expr = Expression::BinOp {
-                        op, left: Box::new(expr), right: Box::new(val)
-                    };
+                    let val = self.parse_multiplicative()?;
+                    then_op = Some(op);
+                    then_val = Some(val);
                 }
-                return Some(expr);
             }
-        };
 
-        Some(Expression::Conditional {
-            base: Box::new(expr),
-            condition,
-            guarded_op: then_op,
-            guarded_val: then_val.map(Box::new),
-        })
+            let polarity = match self.peek() {
+                Some(Token::If)     => { self.consume(); true }
+                Some(Token::Unless) => { self.consume(); false }
+                _ => {
+                    if let (Some(op), Some(val)) = (then_op, then_val) {
+                        expr = Expression::BinOp {
+                            op, left: Box::new(expr), right: Box::new(val)
+                        };
+                    }
+                    break;  // no more conditionals, exit loop
+                }
+            };
+
+            while matches!(self.peek(),
+                Some(Token::The) | Some(Token::Result) |
+                Some(Token::Is)  | Some(Token::Of)
+            ) { self.consume(); }
+
+            let condition = match self.peek() {
+                Some(Token::Negative) => { self.consume(); Condition::IsNegative }
+                Some(Token::Positive) => { self.consume(); Condition::IsPositive }
+                Some(Token::Cmp(_)) => {
+                    if let Some(Token::Cmp(op)) = self.peek().cloned() {
+                        self.consume();
+                        self.skip_fillers();
+                        if let Some(Expression::Number(threshold)) = self.parse_primary() {
+                            Condition::Comparison { op, threshold, polarity }
+                        } else {
+                            if let (Some(op), Some(val)) = (then_op, then_val) {
+                                expr = Expression::BinOp {
+                                    op, left: Box::new(expr), right: Box::new(val)
+                                };
+                            }
+                            break;
+                        }
+                    } else { break; }
+                }
+                _ => {
+                    if let (Some(op), Some(val)) = (then_op, then_val) {
+                        expr = Expression::BinOp {
+                            op, left: Box::new(expr), right: Box::new(val)
+                        };
+                    }
+                    break;
+                }
+            };
+
+            expr = Expression::Conditional {
+                base: Box::new(expr),
+                condition,
+                guarded_op: then_op,
+                guarded_val: then_val.map(Box::new),
+            };
+            // continue loop — check for another then/unless/if
+        }
+
+        Some(expr)
     }
         
 
-        // No unless — apply then_op normall
+    // No unless — apply then_op normall
     // After "then", we expect an infix or prefix operation applied to the
     // accumulated expression so far as the implicit left operand.
     // "then multiply by 3"  → Mul(expr, 3)
@@ -639,13 +662,14 @@ impl Parser {
             self.skip_fillers();
             match self.peek() {
                 Some(Token::Number(_)) => {
-                    if let Some(next) = self.parse_primary() {
+                    if let Some(next) = self.parse_additive() {
                         acc = Expression::BinOp {
                             op: op.clone(),
                             left: Box::new(acc),
                             right: Box::new(next),
                         };
                     } else { break; }
+                    // break; 
                 }
                 // "Add 5 to the result of X" — right side is a sub-expression
                 Some(Token::The) | Some(Token::Result) | Some(Token::Of) => {

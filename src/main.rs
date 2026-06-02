@@ -72,6 +72,11 @@ fn main(){
         "3 = 3",
         "2 is greater than 4",
         "Add sixty seven to the result of subtracting hundred from thousand, then multiply it by three if the result is greater than  or equal to 900.",
+        "subtract -5 from 10",
+        "Add -15 and 10",
+        "Subtract -10 from -50",
+        "Subtract twenty from ten then multiply by three unless the result is negative, then multiply by -1 if the result is less than zero",
+
     ];
 
      for text in text {
