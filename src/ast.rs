@@ -1,4 +1,4 @@
-use crate::{ast::Token::{LParenthesis, Op, Then}, math_engine::{is_number_word, word_to_number}};
+use crate::{math_engine::{is_number_word, word_to_number}};
 
 #[derive(Debug, Clone)]
 pub enum Expression {
@@ -53,12 +53,6 @@ pub enum CompareOp {
     NotEqualTo,
     GreaterThanOrEqualTo,
     LessThanOrEqualTo,
-}
-
-#[derive(Debug, Clone)]
-pub enum CompareResult {
-    Number(f64),
-    ConditionMet(bool),
 }
 
 #[derive(Debug, Clone)]
@@ -371,85 +365,6 @@ impl Parser {
         }
 
         Some(expr)
-    }
-        
-
-    // No unless — apply then_op normall
-    // After "then", we expect an infix or prefix operation applied to the
-    // accumulated expression so far as the implicit left operand.
-    // "then multiply by 3"  → Mul(expr, 3)
-    // "then add 5"          → Add(expr, 5)
-    fn parse_then_continuation(&mut self, left: Expression) -> Option<Expression> {
-        match self.peek()?.clone() {
-            Token::Op(Operation::Multiply) => {
-                self.consume();
-                self.skip_fillers();
-                let right = self.parse_primary()?;
-                Some(Expression::BinOp {
-                    op: Operation::Multiply,
-                    left: Box::new(left),
-                    right: Box::new(right),
-                })
-            }
-            Token::Op(Operation::Divide) => {
-                self.consume();
-                self.skip_fillers();
-                let right = self.parse_primary()?;
-                Some(Expression::BinOp {
-                    op: Operation::Divide,
-                    left: Box::new(left),
-                    right: Box::new(right),
-                })
-            }
-            Token::Op(Operation::Add) => {
-                self.consume();
-                self.skip_fillers();
-                let right = self.parse_rhs()?;
-                Some(Expression::BinOp {
-                    op: Operation::Add,
-                    left: Box::new(left),
-                    right: Box::new(right),
-                })
-            }
-            Token::Op(Operation::Subtract) => {
-                self.consume();
-                self.skip_fillers();
-                let (l, r) = self.parse_subtract_args()?;
-                // Here left was the accumulated expr; wrap it with the subtraction
-                // For "then subtract X from Y", Y-X is new standalone — rare case
-                Some(Expression::BinOp {
-                    op: Operation::Subtract,
-                    left: Box::new(l),
-                    right: Box::new(r),
-                })
-            }
-            _ => Some(left), // nothing recognised, return as-is
-        }
-    }
-
-    // "unless the result is negative/positive/zero"
-    fn parse_unless(&mut self, main: Expression) -> Option<Expression> {
-        self.consume(); // eat Unless
-        // skip "the result is" or any subset of those words
-        while matches!(self.peek(),
-            Some(Token::The) | Some(Token::Result) | Some(Token::Is) | Some(Token::Of)
-        ) {
-            self.consume();
-        }
-        let condition = match self.peek() {
-            Some(Token::Negative) => { self.consume(); Condition::IsNegative }
-            Some(Token::Positive) => { self.consume(); Condition::IsPositive }
-            Some(Token::Number(n)) if *n == 0.0 => { self.consume(); Condition::IsZero }
-            _ => return Some(main),
-        };
-        // Any "then <op> <val>" after the condition sets the alternative
-        // Default: when condition met, result becomes 0
-        Some(Expression::Conditional {
-            base: Box::new(main),
-            condition,
-            guarded_op: Some(Operation::Multiply),
-            guarded_val: Some(Box::new(Expression::Number(0.0))),
-        })
     }
 
     // additive: handles infix + and - with standard left-to-right chaining
