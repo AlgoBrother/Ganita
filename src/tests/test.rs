@@ -1,5 +1,17 @@
 use crate::math_engine::compute;
 
+fn assert_approx_eq(left: Result<f64, String>, right: f64) {
+    match left {
+        Ok(val) => {
+            // Rounds to 4 decimal places: e.g., 0.5773502 -> 0.5774
+            let rounded_left = (val * 10000.0).round() / 10000.0;
+            let rounded_right = (right * 10000.0).round() / 10000.0;
+            assert_eq!(rounded_left, rounded_right);
+        }
+        Err(e) => panic!("Expected Ok, got Err: {:?}", e),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*; 
@@ -195,6 +207,84 @@ fn test_double_negatives() {
     // "Subtract minus five" -> minus minus five -> + 5
     assert_eq!(compute("Subtract minus five from ten"), Ok(15.0));
 }
+
+// Trignometry tests
+
+// ── Basic Trigonometry ───────────────────────────────────────
+
+    #[test]
+    fn test_trig_basic_degrees() {
+        assert_approx_eq(compute("sine of 30 degrees"), 0.5);
+        assert_approx_eq(compute("cos 45 degrees"), 0.7071); // depending on your rounding, adjust if needed
+        assert_approx_eq(compute("tangent of 60 degrees"), 1.7321);
+    }
+
+    #[test]
+    fn test_trig_reciprocals() {
+        assert_approx_eq(compute("cosecant of 30 degrees"), 2.0);
+        assert_approx_eq(compute("secant of 60 degrees"), 2.0);
+        assert_approx_eq(compute("cotangent of 45 degrees"), 1.0);
+    }
+
+    #[test]
+    fn test_trig_inverses() {
+        assert_approx_eq(compute("inverse sine of 0.5"), 30.0);
+        assert_approx_eq(compute("inverse cosine of 0.5"), 60.0);
+        assert_approx_eq(compute("inverse tangent of 1"), 45.0);
+    }
+
+    #[test]
+    fn test_trig_radians_and_default() {
+        // Default should match degrees based on your logs
+        assert_approx_eq(compute("sin 30"), 0.5);
+        // Explicit radians
+        assert_approx_eq(compute("sin 30 radians"), -0.9880);
+    }
+
+    // ── Creative & Tricky Advanced Trig ──────────────────────────
+
+    #[test]
+    fn test_nested_trig_identities() {
+        // sin^2(x) + cos^2(x) = 1
+        // "sin 30 ^ 2 + cos 30 ^ 2" -> (0.5)^2 + (0.866025)^2 = 0.25 + 0.75 = 1.0
+        // Tests if exponent binds tighter than addition, but looser than the trig function!
+        assert_approx_eq(compute("sin 30 ^ 2 + cos 30 ^ 2"), 1.0);
+    }
+
+    #[test]
+    fn test_trig_composition() {
+        // tan(arcsin(0.5)) -> tan(30 degrees) -> 0.57735
+        assert_approx_eq(compute("tangent of inverse sine of 0.5"), 0.5774);
+    }
+
+    #[test]
+    fn test_trig_with_implicit_multi_operand() {
+        // "add 5 5 5 5 5 5 5 then subtract the sum with 3 then subtract with 38" -> 35 - 3 - 38 = -6
+        // Let's pass that whole giant expression directly into a trig function!
+        // sin(-6 degrees) = -0.1045
+        assert_approx_eq(
+            compute("sine of add 5 5 5 5 5 5 5 then subtract the sum with 3 then subtract with 38 degrees"), 
+            -0.1045
+        );
+    }
+
+    #[test]
+    fn test_trig_conditional_hijack() {
+        // Tests whether "unless" stops the trig expression boundary or gets swallowed by it.
+        // (inverse sine of 0.5) * 2 unless result is greater than 100
+        // 30.0 * 2 = 60.0 (60 is not > 100) -> returns 60.0
+        assert_approx_eq(
+            compute("inverse sine of 0.5 then multiply by two unless the result is greater than one hundred"), 
+            60.0
+        );
+    }
+
+    #[test]
+    fn test_trig_asymptotic_errors() {
+        // tangent of 90 degrees approaches infinity. Your engine should throw an error or handle math limits.
+        assert!(compute("tangent of 90 degrees").is_err() || compute("tangent of 90 degrees").unwrap().is_infinite());
+    }
+
 }
 
-// TEST RESULTS :  test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+// TEST RESULTS :  test result: ok. 39 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

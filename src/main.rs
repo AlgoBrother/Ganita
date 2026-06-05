@@ -1,6 +1,7 @@
 mod ast;
 mod math_engine;
-mod tests; // will add soon
+mod tests; 
+mod trignometry;
 use math_engine::{text_analyser, word_to_number};
 
 fn main(){
@@ -76,6 +77,24 @@ fn main(){
         "Add -15 and 10",
         "Subtract -10 from -50",
         "Subtract twenty from ten then multiply by three unless the result is negative, then multiply by -1 if the result is less than zero",
+        "add 5 5 5 5 5 5 5 then subtract the sum with 3 then subtract with 38",
+        "sine of 30 degrees",
+        "cosine of 45 degrees",
+        "tangent of 60 degrees",
+        "cosecant of 30 degrees",
+        "secant of 60 degrees",
+        "cotangent of 45 degrees",
+        "inverse sine of 0.5",
+        "inverse cosine of 0.5",
+        "inverse tangent of 1",
+        "sin 30 degrees",
+        "cos 45 degrees",
+        "sin 30",
+        "sin 30 radians",
+        "sine of add 5 5 5 5 5 5 5 then subtract the sum with 3 then subtract with 38 degrees",
+        "sin 30 ^ 2 + cos 30 ^ 2",
+        "inverse sine of 0.5 then multiply by two unless the result is greater than one hundred",
+
 
     ];
 

@@ -1,4 +1,5 @@
-use crate::{math_engine::{is_number_word, word_to_number}};
+use crate::{math_engine::{is_number_word, word_to_number}, trignometry::trigo::{TrigonometricFunction, compute_trigo_func}};
+use crate::trignometry::trigo::AngleType;
 
 #[derive(Debug, Clone)]
 pub enum Expression {
@@ -8,6 +9,12 @@ pub enum Expression {
         op: Operation,
         left: Box<Expression>,
         right: Box<Expression>,
+    },
+
+    UnaryOp{ // for trigno
+        func: TrigonometricFunction,
+        operand: Box<Expression>,
+        unit: AngleType,
     },
 
     Conditional {
@@ -75,6 +82,19 @@ pub enum Token {
     Positive,
     LParenthesis,
     RParenthesis,
+
+    Sin, 
+    Cos,
+    Tan,
+    Cosec,
+    Sec,
+    Cot,
+    Arcsin,
+    Arccos,
+    Arctan,
+
+    Radians,
+    Degrees,
 }
 
 
@@ -150,8 +170,33 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             "negative" => tokens.push(Token::Negative),
             "positive" => tokens.push(Token::Positive),
             "if"  | "when"    => tokens.push(Token::If),
-            // "("   | "[" | "{"     => tokens.push(Token::LParenthesis),
-            // ")"   | "]" | "}"     => tokens.push(Token::RParenthesis),
+            "sin" | "sine"     => tokens.push(Token::Sin),
+            "cos" | "cosine"   => tokens.push(Token::Cos),
+            "tan" | "tangent"  => tokens.push(Token::Tan),
+            "cosec" | "csc" | "cosecant"   => tokens.push(Token::Cosec),
+            "sec" | "secant"   => tokens.push(Token::Sec),
+            "cot" | "cotangent" => tokens.push(Token::Cot),
+            "arcsin" | "sin^-1" => tokens.push(Token::Arcsin),
+            "arccos" | "cos^-1" => tokens.push(Token::Arccos),
+            "arctan" | "tan^-1"  => tokens.push(Token::Arctan),
+            "inverse" => {
+                if let Some(next) = raw.get(i + 1) {
+                    match next.to_lowercase().as_str() {
+                        "sine" | "sin"     => { tokens.push(Token::Arcsin); i += 2; continue; }
+                        "cosine" | "cos"   => { tokens.push(Token::Arccos); i += 2; continue; }
+                        "tangent" | "tan"  => { tokens.push(Token::Arctan); i += 2; continue; }
+                        _ => {}
+                    }
+                }
+                // unknown "inverse X", skip
+                i += 1; continue;
+            }
+
+
+            "radian" | "radians" => tokens.push(Token::Radians),
+            "degree" | "degrees" => tokens.push(Token::Degrees),
+
+
             "greater"  | "more" => {
                 // peek: is next word "than"?
                 if raw.get(i + 1).map(|s| s.to_lowercase()) == Some("than".to_string()) {
@@ -303,6 +348,17 @@ impl Parser {
                     self.consume();
                     self.skip_fillers();
                     let val = self.parse_multiplicative()?;
+                    
+                    // If we already had a "then", fold it into the base expression 
+                    // before saving the new one! This prevents chaining overwrites.
+                    if let (Some(prev_op), Some(prev_val)) = (then_op, then_val) {
+                        expr = Expression::BinOp {
+                            op: prev_op,
+                            left: Box::new(expr),
+                            right: Box::new(prev_val),
+                        };
+                    }
+
                     then_op = Some(op);
                     then_val = Some(val);
                 }
@@ -321,6 +377,7 @@ impl Parser {
                 }
             };
 
+            // ... (The rest of parse_expression remains exactly the same starting from `while matches!... The | Result | Is | Of`)
             while matches!(self.peek(),
                 Some(Token::The) | Some(Token::Result) |
                 Some(Token::Is)  | Some(Token::Of)
@@ -361,7 +418,6 @@ impl Parser {
                 guarded_op: then_op,
                 guarded_val: then_val.map(Box::new),
             };
-            // continue loop — check for another then/unless/if
         }
 
         Some(expr)
@@ -565,6 +621,67 @@ impl Parser {
                 }
             }
 
+            Token::Sin | Token::Cos | Token::Tan | Token::Cosec | Token::Sec | Token::Cot | Token::Arcsin | Token::Arccos | Token::Arctan => {
+                let func = match self.peek().clone().unwrap() {
+                    Token::Sin => TrigonometricFunction::Sine,
+                    Token::Cos => TrigonometricFunction::Cosine,
+                    Token::Tan => TrigonometricFunction::Tangent,
+                    Token::Cosec => TrigonometricFunction::Cosecant,
+                    Token::Sec => TrigonometricFunction::Secant,
+                    Token::Cot => TrigonometricFunction::Cotangent,
+                    Token::Arcsin => TrigonometricFunction::InverseSine,
+                    Token::Arccos => TrigonometricFunction::InverseCosine,
+                    Token::Arctan => TrigonometricFunction::InverseTangent,
+                    _ => unreachable!(), 
+                };
+
+                self.consume(); // consume the trigonometric function token
+                self.skip_fillers(); // skips words like "of"
+
+                // Backtracking Lookahead Strategy: 
+                let saved_pos = self.pos;
+                let mut explicit_block_success = false;
+                let mut explicit_expr = None;
+                let mut explicit_unit = AngleType::Degrees;
+
+                // ATTEMPT 1: Try parsing a massive loose expression block.
+                // ONLY accept it if the user explicitly closed it with 'degrees' or 'radians'.
+                // This satisfies: "sine of add 5 ... then subtract ... degrees"
+                if let Some(expr) = self.parse_expression() {
+                    if matches!(self.peek(), Some(Token::Degrees) | Some(Token::Radians)) {
+                        explicit_block_success = true;
+                        explicit_expr = Some(expr);
+                        explicit_unit = match self.peek() {
+                            Some(Token::Degrees) => { self.consume(); AngleType::Degrees },
+                            Some(Token::Radians) => { self.consume(); AngleType::Radians },
+                            _ => unreachable!(),
+                        };
+                    }
+                }
+
+                if explicit_block_success {
+                    return Some(Expression::UnaryOp { 
+                        func, 
+                        operand: Box::new(explicit_expr.unwrap()), 
+                        unit: explicit_unit 
+                    });
+                }
+
+                // ATTEMPT 2: Backtrack! The long expression didn't end in a unit.
+                // Revert parser state and parse tightly to respect BODMAS.
+                // This safely satisfies: "sin 30 ^ 2" and "sin 30 then add 5"
+                self.pos = saved_pos;
+                let operand = self.parse_primary()?; 
+
+                let unit = match self.peek() {
+                    Some(Token::Degrees) => { self.consume(); AngleType::Degrees },
+                    Some(Token::Radians) => { self.consume(); AngleType::Radians },
+                    _ => AngleType::Degrees, // default to degrees if no unit specified
+                 };
+                
+                Some(Expression::UnaryOp { func, operand: Box::new(operand), unit })
+            }
+
             _ => None,
         }
     }
@@ -626,7 +743,8 @@ impl Parser {
         match self.peek() {
             Some(Token::And)
             | Some(Token::To)
-            | Some(Token::By)
+            | Some(Token::By) 
+            | Some(Token::Of)
             | Some(Token::Is) => { self.consume(); }  // ← removed The/Result/Of
             _ => break,
         }
@@ -663,7 +781,7 @@ pub fn evaluate(expr: &Expression) -> Result<f64, String> {
             let should_apply_guarded_op = match condition {
                 Condition::IsNegative => base_val >= 0.0,  // apply when NOT negative
                 Condition::IsPositive => base_val <= 0.0,  // apply when NOT positive
-                Condition::IsZero     => base_val != 0.0,  // apply when NOT zero
+                Condition::IsZero    => base_val != 0.0,  // apply when NOT zero
                 Condition::Comparison { op, threshold, polarity } => {
                     let raw = match op {
                         CompareOp::GreaterThan          => base_val > *threshold,
@@ -721,6 +839,12 @@ pub fn evaluate(expr: &Expression) -> Result<f64, String> {
                 
                 (Err(e), _) | (_, Err(e)) => Err(e),
             }
+        }
+    
+        Expression::UnaryOp { func, operand, unit } => {
+            let angle = evaluate(operand)?;
+            compute_trigo_func(func, angle, unit)
+
         }
     }
 }
