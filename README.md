@@ -25,6 +25,7 @@ While modern AI systems can solve these tasks with ease, this project focuses on
 * Exponentiation with correct right associativity
 
   * `2 ^ 3 ^ 4`
+
 * Parentheses support
 * Comparison operators
 
@@ -33,7 +34,7 @@ While modern AI systems can solve these tasks with ease, this project focuses on
   * Greater than or equal (`>=`)
   * Less than or equal (`<=`)
   * Equality (`==`)
-
+---
 ### Conditional Statements
 
 * Conditional execution using `if`
@@ -53,6 +54,48 @@ Add six to the result of subtracting thirty from twenty, then multiply by three 
 ```text
 Add sixty seven to the result of subtracting hundred from thousand, then multiply it by three if the result is greater than or equal to 900
 ```
+
+---
+### Trigonometric Functions
+
+Supported functions:
+
+```text
+sine of 30
+
+cosine of 60
+
+tangent of 45
+```
+
+
+Identity evaluation:
+
+```text
+sin 30 ^ 2 + cos 30 ^ 2
+```
+
+
+Inverse trigonometric functions:
+
+```text
+inverse sine of 0.5
+
+inverse cosine of 0.5
+
+inverse tangent of 1
+```
+
+
+
+Supported units:
+
+```text
+degrees
+
+radians
+```
+
 
 ---
 
