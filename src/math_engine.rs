@@ -1,49 +1,92 @@
-use std::result;
-
 use crate::ast::{Parser, evaluate};
-
+use std::collections::HashMap;
+use lazy_static::lazy_static;
 
 // ======= Number word conversion functions =======
+lazy_static!{
+    static ref NUMBER_WORDS: HashMap<&'static str, f64> = {
+        let mut m = HashMap::new();
+        m.insert("zero", 0.0);
+        m.insert("one", 1.0);
+        m.insert("two", 2.0);
+        m.insert("three", 3.0);
+        m.insert("four", 4.0);
+        m.insert("five", 5.0);
+        m.insert("six", 6.0);
+        m.insert("seven", 7.0);
+        m.insert("eight", 8.0);
+        m.insert("nine", 9.0);
+
+        m.insert("ten", 10.0);
+        m.insert("eleven", 11.0);
+        m.insert("twelve", 12.0);
+        m.insert("thirteen", 13.0);
+        m.insert("fourteen", 14.0);
+        m.insert("fifteen", 15.0);
+        m.insert("sixteen", 16.0);
+        m.insert("seventeen", 17.0);
+        m.insert("eighteen", 18.0);
+        m.insert("nineteen", 19.0);
+
+        m.insert("twenty", 20.0);
+        m.insert("thirty", 30.0);
+        m.insert("forty", 40.0);
+        m.insert("fifty", 50.0);
+        m.insert("sixty", 60.0);
+        m.insert("seventy", 70.0);
+        m.insert("eighty", 80.0);
+        m.insert("ninety", 90.0);
+
+        m.insert("hundred", 100.0);
+        m.insert("thousand", 1_000.0);
+        m.insert("million", 1_000_000.0);
+        m.insert("billion", 1_000_000_000.0);
+
+        m
+    };
+}
+
 pub fn word_value(word: &str) -> Option<f64>{
-  match word {
-        "zero" => Some(0.0),
-        "one" => Some(1.0),
-        "two" => Some(2.0),
-        "three" => Some(3.0),
-        "four" => Some(4.0),
-        "five" => Some(5.0),
-        "six" => Some(6.0),
-        "seven" => Some(7.0),
-        "eight" => Some(8.0),
-        "nine" => Some(9.0),
+//   match word {
+//         "zero" => Some(0.0),
+//         "one" => Some(1.0),
+//         "two" => Some(2.0),
+//         "three" => Some(3.0),
+//         "four" => Some(4.0),
+//         "five" => Some(5.0),
+//         "six" => Some(6.0),
+//         "seven" => Some(7.0),
+//         "eight" => Some(8.0),
+//         "nine" => Some(9.0),
 
-        "ten" => Some(10.0),
-        "eleven" => Some(11.0),
-        "twelve" => Some(12.0),
-        "thirteen" => Some(13.0),
-        "fourteen" => Some(14.0),
-        "fifteen" => Some(15.0),
-        "sixteen" => Some(16.0),
-        "seventeen" => Some(17.0),
-        "eighteen" => Some(18.0),
-        "nineteen" => Some(19.0),
+//         "ten" => Some(10.0),
+//         "eleven" => Some(11.0),
+//         "twelve" => Some(12.0),
+//         "thirteen" => Some(13.0),
+//         "fourteen" => Some(14.0),
+//         "fifteen" => Some(15.0),
+//         "sixteen" => Some(16.0),
+//         "seventeen" => Some(17.0),
+//         "eighteen" => Some(18.0),
+//         "nineteen" => Some(19.0),
 
-        "twenty" => Some(20.0),
-        "thirty" => Some(30.0),
-        "forty" => Some(40.0),
-        "fifty" => Some(50.0),
-        "sixty" => Some(60.0),
-        "seventy" => Some(70.0),
-        "eighty" => Some(80.0),
-        "ninety" => Some(90.0),
+//         "twenty" => Some(20.0),
+//         "thirty" => Some(30.0),
+//         "forty" => Some(40.0),
+//         "fifty" => Some(50.0),
+//         "sixty" => Some(60.0),
+//         "seventy" => Some(70.0),
+//         "eighty" => Some(80.0),
+//         "ninety" => Some(90.0),
 
-        "hundred" => Some(100.0),
-        "thousand" => Some(1_000.0),
-        "million" => Some(1_000_000.0),
-        "billion" => Some(1_000_000_000.0),
+//         "hundred" => Some(100.0),
+//         "thousand" => Some(1_000.0),
+//         "million" => Some(1_000_000.0),
+//         "billion" => Some(1_000_000_000.0),
 
-        _ => None,
-  }
+//         _ => None,
+//   }
+    NUMBER_WORDS.get(word).copied() // we use the HashMap to get the value of the word, and return None if the word is not found
 }
 
 pub fn word_to_number(word: &str) -> Option<f64> {
