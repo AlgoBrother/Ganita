@@ -47,45 +47,6 @@ lazy_static!{
 }
 
 pub fn word_value(word: &str) -> Option<f64>{
-//   match word {
-//         "zero" => Some(0.0),
-//         "one" => Some(1.0),
-//         "two" => Some(2.0),
-//         "three" => Some(3.0),
-//         "four" => Some(4.0),
-//         "five" => Some(5.0),
-//         "six" => Some(6.0),
-//         "seven" => Some(7.0),
-//         "eight" => Some(8.0),
-//         "nine" => Some(9.0),
-
-//         "ten" => Some(10.0),
-//         "eleven" => Some(11.0),
-//         "twelve" => Some(12.0),
-//         "thirteen" => Some(13.0),
-//         "fourteen" => Some(14.0),
-//         "fifteen" => Some(15.0),
-//         "sixteen" => Some(16.0),
-//         "seventeen" => Some(17.0),
-//         "eighteen" => Some(18.0),
-//         "nineteen" => Some(19.0),
-
-//         "twenty" => Some(20.0),
-//         "thirty" => Some(30.0),
-//         "forty" => Some(40.0),
-//         "fifty" => Some(50.0),
-//         "sixty" => Some(60.0),
-//         "seventy" => Some(70.0),
-//         "eighty" => Some(80.0),
-//         "ninety" => Some(90.0),
-
-//         "hundred" => Some(100.0),
-//         "thousand" => Some(1_000.0),
-//         "million" => Some(1_000_000.0),
-//         "billion" => Some(1_000_000_000.0),
-
-//         _ => None,
-//   }
     NUMBER_WORDS.get(word).copied() // we use the HashMap to get the value of the word, and return None if the word is not found
 }
 
