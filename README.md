@@ -111,10 +111,11 @@ radians
 * Conditional statements (`if`, `unless`)
 * Word-to-number conversion
 * Nested expression evaluation
+* Trigonometric functions
 
 ### In Progress
 
-* Trigonometric functions
+* Trigonometric identities
 * Additional grammar patterns
 * Performance optimizations
 * Expanded test coverage
