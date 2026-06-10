@@ -119,7 +119,7 @@ fn compute_inner(text: &str) -> (Option<crate::ast::Expression>, Result<f64, Str
     }
 }
 
-// This is the main compute function that will be used in tests. It just returns the result and ignores the AST.
+// This is the main compute function that will be used in tests directory. It just returns the result and ignores the AST.
 pub fn compute(text: &str) -> Result<f64, String> {
     let (_, result) = compute_inner(text); // we ignore the AST and just return the result
     result
