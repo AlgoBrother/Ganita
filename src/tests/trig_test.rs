@@ -2,7 +2,7 @@
 use crate::trignometry::trigo::PI;
 
 // ═══════════════════════════════════════════════════════════════
-// NCERT Chapter 3 — Trigonometric Functions (basic questions)
+// References from NCERT Chapter 3 — Trigonometric Functions (basic questions)
 // Test cases for NLP_Math_Engine
 // Organised by what the engine can handle NOW vs what needs work 
 // ═══════════════════════════════════════════════════════════════
