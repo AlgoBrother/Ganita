@@ -1,5 +1,7 @@
+#[cfg(test)]
 use crate::math_engine::compute;
 
+#[cfg(test)]
 fn assert_approx_eq(left: Result<f64, String>, right: f64) {
     match left {
         Ok(val) => {
@@ -287,4 +289,4 @@ fn test_double_negatives() {
 
 }
 
-// TEST RESULTS :  test result: ok. 39 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+// TEST RESULTS :  test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

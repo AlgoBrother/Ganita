@@ -1,5 +1,5 @@
 use crate::{math_engine::{is_number_word, word_to_number}, trignometry::trigo::{TrigonometricFunction, compute_trigo_func}};
-use crate::trignometry::trigo::AngleType;
+use crate::trignometry::trigo::{AngleType, PI};
 
 #[derive(Debug, Clone)]
 pub enum Expression {
@@ -28,6 +28,12 @@ pub enum Expression {
         op: CompareOp,
         left: Box<Expression>,
         right: Box<Expression>,
+    },
+
+    Convert {
+        from: AngleType,
+        to: AngleType,
+        operand: Box<Expression>,
     }
 }
 
@@ -78,8 +84,12 @@ pub enum Token {
     Unless,
     Is,
     If,
+    In,
+    Convert,
+
     Negative,
     Positive,
+
     LParenthesis,
     RParenthesis,
 
@@ -170,6 +180,8 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             "negative" => tokens.push(Token::Negative),
             "positive" => tokens.push(Token::Positive),
             "if"  | "when"    => tokens.push(Token::If),
+            "in"      => tokens.push(Token::In),
+            "convert" => tokens.push(Token::Convert),
             "sin" | "sine"     => tokens.push(Token::Sin),
             "cos" | "cosine"   => tokens.push(Token::Cos),
             "tan" | "tangent"  => tokens.push(Token::Tan),
@@ -249,6 +261,8 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 }
                 continue;
             },
+
+            "pi" | "π" => tokens.push(Token::Number(std::f64::consts::PI)),
             _ => {
                 if let Ok(num) = word.parse::<f64>() {
                     tokens.push(Token::Number(num));
@@ -682,6 +696,38 @@ impl Parser {
                 Some(Expression::UnaryOp { func, operand: Box::new(operand), unit })
             }
 
+            Token::Convert => {
+                self.consume();
+                self.skip_fillers();
+                let operand = self.parse_primary()?;
+                self.skip_fillers();  // calling again to skip "degrees/radians to radians/degrees" or "in radians/degrees"
+                
+                let from_unit = match self.peek() {
+                    Some(Token::Degrees) => {self.consume(); AngleType::Degrees},
+                    Some(Token::Radians) => {self.consume(); AngleType::Radians},
+                    _ => AngleType::Radians, // default to radians if no target unit specified
+                };
+
+                if let Some(Token::To) = self.peek() {
+                    self.consume();
+                } else if let Some(Token::In) = self.peek() {
+                    self.consume();
+                }
+
+                self.skip_fillers(); // skip any fillers before the target unit
+
+                let target_unit = match self.peek() {
+                    Some(Token::Degrees) => { self.consume(); AngleType::Degrees },
+                    Some(Token::Radians) => { self.consume(); AngleType::Radians },
+                    _ => AngleType::Radians,    // default to radians if no target unit specified
+                };
+
+                Some(Expression::Convert { 
+                    from: from_unit,
+                    to: target_unit,
+                    operand: Box::new(operand) 
+                })
+            }
             _ => None,
         }
     }
@@ -844,7 +890,16 @@ pub fn evaluate(expr: &Expression) -> Result<f64, String> {
         Expression::UnaryOp { func, operand, unit } => {
             let angle = evaluate(operand)?;
             compute_trigo_func(func, angle, unit)
-
         }
+
+        Expression::Convert { from, to, operand } => {
+            let value = evaluate(operand)?;
+            match (from, to) {
+                (AngleType::Degrees, AngleType::Radians) => Ok(value * PI / 180.0),
+                (AngleType::Radians, AngleType::Degrees) => Ok(value * 180.0 / PI),
+                _ => Ok(value), // No conversion needed
+            }
+        }
+
     }
 }

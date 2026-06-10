@@ -96,6 +96,9 @@ fn main(){
         "inverse sine of 0.5 then multiply by two unless the result is greater than one hundred",
 
 
+        "convert 25 degrees to radians",
+
+
     ];
 
      for text in text {
