@@ -4,6 +4,12 @@ use crate::trignometry::trigo::{AngleType, PI};
 #[derive(Debug, Clone)]
 pub enum Expression {
     Number(f64),
+    // Variable(String), // for future extension with variables, e.g. "Let x be 5, then add x and 10"
+
+    // Assign { // for future extension with variable assignment, e.g. "Let x be 5"
+    //     name: String,
+    //     value: Box<Expression>,
+    // },
 
     BinOp {
         op: Operation,
@@ -35,6 +41,17 @@ pub enum Expression {
         to: AngleType,
         operand: Box<Expression>,
     }
+}
+
+
+#[derive(Debug, Clone)]
+pub enum Variable_Expression {
+    Variable(String), // for future extension with variables, e.g. "Let x be 5, then add x and 10"
+
+    Assign { // for future extension with variable assignment, e.g. "Let x be 5"
+        name: String,
+        value: Box<Expression>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -86,6 +103,8 @@ pub enum Token {
     If,
     In,
     Convert,
+    Let,
+    Be,
 
     Negative,
     Positive,
@@ -105,6 +124,8 @@ pub enum Token {
 
     Radians,
     Degrees,
+
+    Variable(String) // allows for future extension with variables, e.g. "Let x be 5, then add x and 10"
 }
 
 
@@ -182,6 +203,8 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             "if"  | "when"    => tokens.push(Token::If),
             "in"      => tokens.push(Token::In),
             "convert" => tokens.push(Token::Convert),
+            "let"     => tokens.push(Token::Let),
+            "be"      => tokens.push(Token::Be),
             "sin" | "sine"     => tokens.push(Token::Sin),
             "cos" | "cosine"   => tokens.push(Token::Cos),
             "tan" | "tangent"  => tokens.push(Token::Tan),
@@ -263,6 +286,9 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             },
 
             "pi" | "π" => tokens.push(Token::Number(std::f64::consts::PI)),
+
+            
+
             _ => {
                 if let Ok(num) = word.parse::<f64>() {
                     tokens.push(Token::Number(num));
@@ -297,8 +323,14 @@ pub fn tokenize(input: &str) -> Vec<Token> {
 
                         if let Some(num) = word_to_number(&phrase) {
                             tokens.push(Token::Number(num));
+                            i += 1; // skip the last word of the phrase
+                            continue;
                         }
                     }
+
+                    if word.len() == 1 && word.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false){
+                        tokens.push(Token::Variable(word.to_string()));
+                    } 
                 }
                 // unknown words silently skipped
             }
@@ -900,6 +932,13 @@ pub fn evaluate(expr: &Expression) -> Result<f64, String> {
                 _ => Ok(value), // No conversion needed
             }
         }
+
+        // Expression::Variable(name){
+        //     context // having problem here
+        // }
+
+        // // Assignment: "let x be 5" → stores 5 in context, returns 5
+        // Expression::Assign { name, value } => // help me implement these two with context
 
     }
 }
