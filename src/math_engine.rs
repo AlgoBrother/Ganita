@@ -1,4 +1,4 @@
-use crate::ast::{Parser, evaluate};
+use crate::ast::{Parser, evaluate, evaluate_with_context};
 use std::collections::HashMap;
 use lazy_static::lazy_static;
 
@@ -119,11 +119,16 @@ fn compute_inner(text: &str) -> (Option<crate::ast::Expression>, Result<f64, Str
     }
 }
 
+#[cfg(test)]
 // This is the main compute function that will be used in tests directory. It just returns the result and ignores the AST.
 pub fn compute(text: &str) -> Result<f64, String> {
+    // compute_with_context(text, &mut HashMap::new())
     let (_, result) = compute_inner(text); // we ignore the AST and just return the result
     result
 }
+
+
+pub type VarContext = HashMap<String, f64>;
 
 // for main.rs shwoing the whole AST and tokens. Compute is made for test cases where we just want the result and not the AST or tokens.
 pub fn text_analyser(text: &str) { 

@@ -97,7 +97,9 @@ fn main(){
 
 
         "convert 25 degrees to radians",
-
+        "10 to the power of 5", 
+        "Let x be 9", 
+        "x + 9 = 0, find x", // fail (next task)
 
     ];
 

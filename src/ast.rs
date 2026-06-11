@@ -1,15 +1,17 @@
-use crate::{math_engine::{is_number_word, word_to_number}, trignometry::trigo::{TrigonometricFunction, compute_trigo_func}};
+use std::collections::HashMap;
+
+use crate::{math_engine::{VarContext, is_number_word, word_to_number}, trignometry::trigo::{TrigonometricFunction, compute_trigo_func}};
 use crate::trignometry::trigo::{AngleType, PI};
 
 #[derive(Debug, Clone)]
 pub enum Expression {
     Number(f64),
-    // Variable(String), // for future extension with variables, e.g. "Let x be 5, then add x and 10"
+    Variable(String), // for future extension with variables, e.g. "Let x be 5, then add x and 10"
 
-    // Assign { // for future extension with variable assignment, e.g. "Let x be 5"
-    //     name: String,
-    //     value: Box<Expression>,
-    // },
+    Assign { // for future extension with variable assignment, e.g. "Let x be 5"
+        name: String,
+        value: Box<Expression>,
+    },
 
     BinOp {
         op: Operation,
@@ -41,17 +43,6 @@ pub enum Expression {
         to: AngleType,
         operand: Box<Expression>,
     }
-}
-
-
-#[derive(Debug, Clone)]
-pub enum Variable_Expression {
-    Variable(String), // for future extension with variables, e.g. "Let x be 5, then add x and 10"
-
-    Assign { // for future extension with variable assignment, e.g. "Let x be 5"
-        name: String,
-        value: Box<Expression>,
-    },
 }
 
 #[derive(Debug, Clone)]
@@ -760,6 +751,31 @@ impl Parser {
                     operand: Box::new(operand) 
                 })
             }
+            
+            Token::Let => {
+                self.consume();
+                if let Some(Token::Variable(name)) = self.peek().cloned() {
+                    self.consume(); // consume/process variable name
+                    self.skip_fillers();
+
+                    match self.peek() {
+                        Some(Token::Be) => {self.consume();},
+                        Some(Token::Cmp(CompareOp::EqualTo)) => { self.consume(); }
+                        _ => {} // allow "Let x 5" as well as "Let x be 5" and "Let x = 5"
+                    }
+
+                    let value = self.parse_additive()?;
+                    Some(Expression::Assign { name, value: Box::new(value) })
+                } else {
+                    None // invalid variable name
+                }
+            }
+
+            Token::Variable(name) => {
+                self.consume();
+                Some(Expression::Variable(name))
+            }
+            
             _ => None,
         }
     }
@@ -834,13 +850,23 @@ impl Parser {
 // EVALUATOR
 // ──────────────────────────────────────────────
 
-pub fn evaluate(expr: &Expression) -> Result<f64, String> {
+pub fn evaluate_with_context(expr: &Expression, context: &mut VarContext) -> Result<f64, String> {
     match expr {
         Expression::Number(n) => Ok(*n),
 
+        Expression::Variable(name) => {
+            context.get(name).copied().ok_or_else(|| format!("{} Variable not found", name))
+        },
+
+        Expression::Assign { name, value } => {
+            let value = evaluate_with_context(value, context)?;
+            context.insert(name.clone(), value);
+            Ok(value)
+        },
+
         Expression::BinOp { op, left, right } => {
-            let l = evaluate(left)?;
-            let r = evaluate(right)?;
+            let l = evaluate_with_context(left, context)?;
+            let r = evaluate_with_context(right, context)?;
             match op {
                 Operation::Add      => Ok(l + r),
                 Operation::Subtract => Ok(l - r),
@@ -854,7 +880,7 @@ pub fn evaluate(expr: &Expression) -> Result<f64, String> {
         }
 
         Expression::Conditional { base, condition, guarded_op, guarded_val } => {
-            let base_val = evaluate(base)?;
+            let base_val = evaluate_with_context(base, context)?;
 
             let should_apply_guarded_op = match condition {
                 Condition::IsNegative => base_val >= 0.0,  // apply when NOT negative
@@ -879,7 +905,7 @@ pub fn evaluate(expr: &Expression) -> Result<f64, String> {
                 // condition says yes — apply the guarded operation
                 match (guarded_op, guarded_val) {
                     (Some(op), Some(val)) => {
-                        let v = evaluate(val)?;
+                        let v = evaluate_with_context(val, context)?;
                         match op {
                             Operation::Add      => Ok(base_val + v),
                             Operation::Subtract => Ok(base_val - v),
@@ -900,45 +926,35 @@ pub fn evaluate(expr: &Expression) -> Result<f64, String> {
         }
 
         Expression::Comparison { op, left, right } => {
-            let l = evaluate(left);
-            let r = evaluate(right);
-            match (l, r) {
-                (Ok(lv), Ok(rv)) => {
-                    let result = match op {
-                        CompareOp::GreaterThan => lv > rv,
-                        CompareOp::LessThan => lv < rv,
-                        CompareOp::EqualTo => (lv - rv).abs() < 1e-9, // handle floating-point equality with a tolerance we do this instead of == to avoid issues where two numbers are mathematically equal but differ in their last decimal places due to floating-point precision limitations
-                        CompareOp::NotEqualTo => (lv - rv).abs() >= 1e-9, 
-                        CompareOp::GreaterThanOrEqualTo => lv >= rv,
-                        CompareOp::LessThanOrEqualTo => lv <= rv,
-                    };
-                    Ok(result as u8 as f64) // return 1.0 for true, 0.0 for false
-                }
-                
-                (Err(e), _) | (_, Err(e)) => Err(e),
-            }
+            let lv = evaluate_with_context(left, context)?;
+            let rv = evaluate_with_context(right, context)?;
+            let result = match op {
+                CompareOp::GreaterThan => lv > rv,
+                CompareOp::LessThan => lv < rv,
+                CompareOp::EqualTo => (lv - rv).abs() < 1e-9, // handle floating-point equality with a tolerance we do this instead of == to avoid issues where two numbers are mathematically equal but differ in their last decimal places due to floating-point precision limitations
+                CompareOp::NotEqualTo => (lv - rv).abs() >= 1e-9,
+                CompareOp::GreaterThanOrEqualTo => lv >= rv,
+                CompareOp::LessThanOrEqualTo => lv <= rv,
+            };
+            Ok(result as u8 as f64) // return 1.0 for true, 0.0 for false
         }
     
         Expression::UnaryOp { func, operand, unit } => {
-            let angle = evaluate(operand)?;
+            let angle = evaluate_with_context(operand, context)?;
             compute_trigo_func(func, angle, unit)
         }
 
         Expression::Convert { from, to, operand } => {
-            let value = evaluate(operand)?;
+            let value = evaluate_with_context(operand, context)?;
             match (from, to) {
                 (AngleType::Degrees, AngleType::Radians) => Ok(value * PI / 180.0),
                 (AngleType::Radians, AngleType::Degrees) => Ok(value * 180.0 / PI),
                 _ => Ok(value), // No conversion needed
             }
         }
-
-        // Expression::Variable(name){
-        //     context // having problem here
-        // }
-
-        // // Assignment: "let x be 5" → stores 5 in context, returns 5
-        // Expression::Assign { name, value } => // help me implement these two with context
-
     }
+}
+
+pub fn evaluate(expr: &Expression) -> Result<f64, String> {
+    evaluate_with_context(expr, &mut HashMap::new())
 }
