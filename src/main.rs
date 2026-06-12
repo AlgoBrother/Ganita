@@ -101,7 +101,7 @@ fn main(){
         "convert 25 degrees to radians",
         "10 to the power of 5", 
         "Let x be 9", 
-        "x + 9 = 0, find x", // fail (next task)
+        "x + 9 = 0, find x",
         "solve x in 2 * x = 10",
         "Solve 1 + 1",
         "solve x in (((x + 5) * 2) - 10) = 20",
