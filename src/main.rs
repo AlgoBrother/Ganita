@@ -2,7 +2,9 @@ mod ast;
 mod math_engine;
 mod tests; 
 mod trignometry;
-use math_engine::{text_analyser, word_to_number};
+mod variable_solving;
+mod functions;
+use math_engine::{text_analyser};
 
 fn main(){
     let text = [
@@ -100,6 +102,15 @@ fn main(){
         "10 to the power of 5", 
         "Let x be 9", 
         "x + 9 = 0, find x", // fail (next task)
+        "solve x in 2 * x = 10",
+        "Solve 1 + 1",
+        "solve x in (((x + 5) * 2) - 10) = 20",
+        "solve x in (((((x + 1) + 2) + 3) + 4) + 5) = 20",
+        "solve x in (x + 5) * 2 = 20",
+        "x  = 5 + 10, what is the value of x", 
+        "What is the value of x if x + 5 = 10",
+        "What is the value of 3 + 3",
+        "5!",
 
     ];
 
@@ -108,9 +119,4 @@ fn main(){
          text_analyser(text);
          println!("-----------------------------");
      }
-
-    println!("Result: {}", word_to_number("five million three thousand nine hundred ninety").unwrap_or_else(|| {
-        println!("Failed to convert word to number");
-        0.0
-    }));
 }

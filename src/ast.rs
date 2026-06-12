@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{math_engine::{VarContext, is_number_word, word_to_number}, trignometry::trigo::{TrigonometricFunction, compute_trigo_func}};
+use crate::{math_engine::{VarContext, is_number_word, word_to_number}, trignometry::trigo::{TrigonometricFunction, compute_trigo_func}, variable_solving::variable_solve::{solve_linear, solve_numerically}};
 use crate::trignometry::trigo::{AngleType, PI};
+use crate::functions::factorial;
 
 #[derive(Debug, Clone)]
 pub enum Expression {
@@ -13,13 +14,18 @@ pub enum Expression {
         value: Box<Expression>,
     },
 
+    UnaryOp {
+        op: UnaryOperation,
+        operand: Box<Expression>,
+    },
+
     BinOp {
         op: Operation,
         left: Box<Expression>,
         right: Box<Expression>,
     },
 
-    UnaryOp{ // for trigno
+    TrigoOp{ // for trigno
         func: TrigonometricFunction,
         operand: Box<Expression>,
         unit: AngleType,
@@ -42,6 +48,11 @@ pub enum Expression {
         from: AngleType,
         to: AngleType,
         operand: Box<Expression>,
+    },
+
+    Solve {
+        var: String,
+        equation: Box<Expression>,
     }
 }
 
@@ -67,6 +78,11 @@ pub enum Operation {
 }
 
 #[derive(Debug, Clone)]
+pub enum UnaryOperation{
+        Factorial, 
+}
+
+#[derive(Debug, Clone)]
 pub enum CompareOp {
     GreaterThan,
     LessThan,
@@ -79,6 +95,7 @@ pub enum CompareOp {
 #[derive(Debug, Clone)]
 pub enum Token {
     Op(Operation),
+    SingleDigitOp(UnaryOperation),
     Cmp(CompareOp),
     Number(f64),
     From,
@@ -96,6 +113,8 @@ pub enum Token {
     Convert,
     Let,
     Be,
+
+    Solve,
 
     Negative,
     Positive,
@@ -131,8 +150,20 @@ pub fn tokenize(input: &str) -> Vec<Token> {
         let word_raw = raw[i];
         let word_lower = word_raw.to_lowercase();
 
+
         // ── Step 1: check raw word as a symbol or keyword first ──────────
         match word_lower.as_str() {
+            // if block for checking text like 5! factorial operation support
+            _ if word_lower.ends_with('!') && word_lower.len() > 1 => {
+                let num_part = &word_lower[..word_lower.len()-1];
+                if let Ok(num) = num_part.parse::<f64>() {
+                    tokens.push(Token::Number(num));
+                    tokens.push(Token::SingleDigitOp(UnaryOperation::Factorial));
+                    i += 1;
+                    continue;
+                }
+            }
+
             "+" => { tokens.push(Token::Op(Operation::Add));      i += 1; continue; }
             "-" => { tokens.push(Token::Op(Operation::Subtract)); i += 1; continue; }
             "*" => { tokens.push(Token::Op(Operation::Multiply)); i += 1; continue; }
@@ -146,6 +177,17 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             "!=" => { tokens.push(Token::Cmp(CompareOp::NotEqualTo)); i += 1; continue; }
             "<=" => { tokens.push(Token::Cmp(CompareOp::LessThanOrEqualTo)); i += 1; continue; }
             ">=" => { tokens.push(Token::Cmp(CompareOp::GreaterThanOrEqualTo)); i += 1; continue; }
+            "!" => {
+                if raw.get(i + 1) == Some(&"=") {
+                    tokens.push(Token::Cmp(CompareOp::NotEqualTo));
+                    i += 2;
+                    continue;
+                } else {
+                    tokens.push(Token::SingleDigitOp(UnaryOperation::Factorial));
+                    i += 1;
+                    continue;
+                }
+            }
             _ => {}
         }
 
@@ -189,6 +231,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             "of"       => tokens.push(Token::Of),
             "unless"   => tokens.push(Token::Unless),
             "is"       => tokens.push(Token::Is),
+            "solve" | "find" | "determine"  => tokens.push(Token::Solve),
             "negative" => tokens.push(Token::Negative),
             "positive" => tokens.push(Token::Positive),
             "if"  | "when"    => tokens.push(Token::If),
@@ -276,9 +319,11 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 continue;
             },
 
+            "factorial" => tokens.push(Token::SingleDigitOp(UnaryOperation::Factorial)),
+
             "pi" | "π" => tokens.push(Token::Number(std::f64::consts::PI)),
 
-            
+            "where" | "such" | "that" | "what" | "value" => {} // equation introducers, silently skip
 
             _ => {
                 if let Ok(num) = word.parse::<f64>() {
@@ -372,9 +417,54 @@ impl Parser {
 
     // ── Top-level entry: parse expression then check for Unless ──────────
     pub fn parse_expression(&mut self) -> Option<Expression> {
+        // First check if the input STARTS with Solve token
+        // "find x where/such/that ..." — prefix form
+        if matches!(self.peek(), Some(Token::Solve)) {
+            self.consume();
+            self.skip_fillers();
+            if let Some(Token::Variable(var_name)) = self.peek().cloned() {
+                self.consume();
+                self.skip_fillers(); // eats "where", "such", "that", "in"
+                let equation = self.parse_comparison_then_conditional()?;
+                return Some(Expression::Solve {
+                    var: var_name,
+                    equation: Box::new(equation),
+                });
+            }
+        }
+
+        // Parse the full expression normally (handles all existing cases)
+        let mut expr = self.parse_comparison_then_conditional()?;
+
+        // After the main expression is parsed, check for solve patterns
+        // "x + 9 = 0, find x" — suffix form
+        // Comma is stripped by tokenizer, so we just check for Solve token
+        if matches!(self.peek(), Some(Token::Solve)) {
+            // existing suffix solve handling
+            self.consume();
+            self.skip_fillers();
+            if let Some(Token::Variable(var_name)) = self.peek().cloned() {
+                self.consume();
+                expr = Expression::Solve { var: var_name, equation: Box::new(expr) };
+            }
+        } else if matches!(self.peek(), Some(Token::If)) {
+            // "x if x + 5 = 10" — the variable is already in expr as Variable("x")
+            if let Expression::Variable(var_name) = &expr {
+                let var_name = var_name.clone();
+                self.consume(); // eat If
+                self.skip_fillers();
+                let equation = self.parse_comparison_then_conditional()?;
+                expr = Expression::Solve { var: var_name, equation: Box::new(equation) };
+            }
+        }
+        Some(expr)
+    }
+
+    // Seperated core conditional/then logic from parse_expression and made a seperate functionn.
+    fn parse_comparison_then_conditional(&mut self) -> Option<Expression> {
         let mut expr = self.parse_comparison()?;
 
-        loop {  // ← loop so nested conditionals chain
+        loop {
             let mut then_op: Option<Operation> = None;
             let mut then_val: Option<Expression> = None;
 
@@ -385,9 +475,7 @@ impl Parser {
                     self.consume();
                     self.skip_fillers();
                     let val = self.parse_multiplicative()?;
-                    
-                    // If we already had a "then", fold it into the base expression 
-                    // before saving the new one! This prevents chaining overwrites.
+
                     if let (Some(prev_op), Some(prev_val)) = (then_op, then_val) {
                         expr = Expression::BinOp {
                             op: prev_op,
@@ -395,68 +483,119 @@ impl Parser {
                             right: Box::new(prev_val),
                         };
                     }
-
                     then_op = Some(op);
                     then_val = Some(val);
                 }
             }
 
-            let polarity = match self.peek() {
-                Some(Token::If)     => { self.consume(); true }
-                Some(Token::Unless) => { self.consume(); false }
-                _ => {
-                    if let (Some(op), Some(val)) = (then_op, then_val) {
-                        expr = Expression::BinOp {
-                            op, left: Box::new(expr), right: Box::new(val)
-                        };
-                    }
-                    break;  // no more conditionals, exit loop
-                }
-            };
+            // Save the state
+            let state_before_condition = self.pos; // in case we need to backtrack if condition parsing fails (example: What is the value of x if x + 5 = 10, here x is unknown whihc will result in variable not found error.)
+            let is_if_condition = matches!(self.peek(), Some(Token::If));
+            let is_unless_condition = matches!(self.peek(), Some(Token::Unless));
 
-            // ... (The rest of parse_expression remains exactly the same starting from `while matches!... The | Result | Is | Of`)
+            if !is_if_condition && !is_unless_condition {
+                if let (Some(op), Some(val)) = (then_op, then_val) {
+                    expr = Expression::BinOp {
+                        op,
+                        left: Box::new(expr),
+                        right: Box::new(val),
+                    };
+                }
+                break;
+            }
+
+            let polarity = is_if_condition; // true for "if", false for "unless"
+            self.consume(); // Consume the If / Unless token
+
+
+
+        //     let polarity = match self.peek() {
+        //         Some(Token::If)     => { self.consume(); true }
+        //         Some(Token::Unless) => { self.consume(); false }
+        //         _ => {
+        //             if let (Some(op), Some(val)) = (then_op, then_val) {
+        //                 expr = Expression::BinOp {
+        //                     op, left: Box::new(expr), right: Box::new(val)
+        //                 };
+        //             }
+        //             break;
+        //         }
+        //     };
+
             while matches!(self.peek(),
                 Some(Token::The) | Some(Token::Result) |
                 Some(Token::Is)  | Some(Token::Of)
             ) { self.consume(); }
 
-            let condition = match self.peek() {
-                Some(Token::Negative) => { self.consume(); Condition::IsNegative }
-                Some(Token::Positive) => { self.consume(); Condition::IsPositive }
-                Some(Token::Cmp(_)) => {
-                    if let Some(Token::Cmp(op)) = self.peek().cloned() {
-                        self.consume();
-                        self.skip_fillers();
-                        if let Some(Expression::Number(threshold)) = self.parse_primary() {
-                            Condition::Comparison { op, threshold, polarity }
-                        } else {
-                            if let (Some(op), Some(val)) = (then_op, then_val) {
-                                expr = Expression::BinOp {
-                                    op, left: Box::new(expr), right: Box::new(val)
-                                };
-                            }
-                            break;
-                        }
-                    } else { break; }
-                }
-                _ => {
-                    if let (Some(op), Some(val)) = (then_op, then_val) {
-                        expr = Expression::BinOp {
-                            op, left: Box::new(expr), right: Box::new(val)
-                        };
+            let condition_opt = match self.peek() {
+                Some(Token::Negative) => { self.consume(); Some(Condition::IsNegative) }
+                Some(Token::Positive) => { self.consume(); Some(Condition::IsPositive) }
+                Some(Token::Cmp(op)) => {
+                    let op = op.clone();
+                    self.consume();
+                    self.skip_fillers();
+                    if let Some(Expression::Number(threshold)) = self.parse_primary() {
+                        Some(Condition::Comparison { op, threshold, polarity })
+                    } else {
+                        None
                     }
-                    break;
                 }
+                _ => None // It's either an equation or invalid, abort conditional parsing
             };
 
-            expr = Expression::Conditional {
-                base: Box::new(expr),
-                condition,
-                guarded_op: then_op,
-                guarded_val: then_val.map(Box::new),
-            };
+            if let Some(condition) = condition_opt{
+                expr = Expression::Conditional { 
+                    base: Box::new(expr),
+                    condition,
+                    guarded_op: then_op,
+                    guarded_val: then_val.map(Box::new) 
+                };
+            } else{
+                self.pos = state_before_condition;
+            
+                if let (Some(op), Some(val)) = (then_op, then_val) {
+                    expr = Expression::BinOp {
+                        op, left: Box::new(expr), right: Box::new(val)
+                    };
+                }
+                break;
+            }
+            // let condition = match self.peek() {
+            //     Some(Token::Negative) => { self.consume(); Condition::IsNegative }
+            //     Some(Token::Positive) => { self.consume(); Condition::IsPositive }
+            //     Some(Token::Cmp(_)) => {
+            //         if let Some(Token::Cmp(op)) = self.peek().cloned() {
+            //             self.consume();
+            //             self.skip_fillers();
+            //             if let Some(Expression::Number(threshold)) = self.parse_primary() {
+            //                 Condition::Comparison { op, threshold, polarity }
+            //             } else {
+            //                 if let (Some(op), Some(val)) = (then_op, then_val) {
+            //                     expr = Expression::BinOp {
+            //                         op, left: Box::new(expr), right: Box::new(val)
+            //                     };
+            //                 }
+            //                 break;
+            //             }
+            //         } else { break; }
+            //     }
+        //         _ => {
+        //             if let (Some(op), Some(val)) = (then_op, then_val) {
+        //                 expr = Expression::BinOp {
+        //                     op, left: Box::new(expr), right: Box::new(val)
+        //                 };
+        //             }
+        //             break;
+        //         }
+        //     };
+
+        //     expr = Expression::Conditional {
+        //         base: Box::new(expr),
+        //         condition,
+        //         guarded_op: then_op,
+        //         guarded_val: then_val.map(Box::new),
+        //     };
         }
-
         Some(expr)
     }
 
@@ -464,8 +603,9 @@ impl Parser {
     fn parse_additive(&mut self) -> Option<Expression> {
         let mut left = self.parse_multiplicative()?;
 
-        loop {
+        loop { 
             match self.peek() {
+                // Addition Operation: left + right
                 Some(Token::Op(Operation::Add)) => {
                     self.consume();
                     self.skip_fillers();
@@ -476,18 +616,20 @@ impl Parser {
                         right: Box::new(right),
                     };
                 }
+
+                // Subtraction Operation: left - right
                 Some(Token::Op(Operation::Subtract)) => {
                     self.consume();
                     self.skip_fillers();
                     
                     // peek ahead: if next is a number/expr followed by "from",
-                    // it's a natural-language "subtract X from Y" — use parse_subtract_args
+                    // then it's a natural-language "subtract X from Y" => use parse_subtract_args 
                     // Otherwise it's plain infix: left - right
                     let x = self.parse_rhs();
                     if matches!(self.peek(), Some(Token::From)) {
                         // "subtract X from Y" form — Y is the new left, X is right
                         self.consume(); // eat From
-                        let y = self.parse_rhs()?;
+                        let y = self.parse_rhs()?; // parse Y after "from"
                         left = Expression::BinOp {
                             op: Operation::Subtract,
                             left: Box::new(y),
@@ -534,6 +676,17 @@ impl Parser {
                         left: Box::new(left),
                         right: Box::new(right),
                     };
+                }
+
+                _ => break,
+            }
+        }
+
+        loop {
+            match self.peek() {
+                Some(Token::SingleDigitOp(UnaryOperation::Factorial)) => {
+                    self.consume();
+                    left = Expression::UnaryOp { op: UnaryOperation::Factorial, operand: Box::new(left) };
                 }
                 _ => break,
             }
@@ -697,7 +850,7 @@ impl Parser {
                 }
 
                 if explicit_block_success {
-                    return Some(Expression::UnaryOp { 
+                    return Some(Expression::TrigoOp { 
                         func, 
                         operand: Box::new(explicit_expr.unwrap()), 
                         unit: explicit_unit 
@@ -716,7 +869,7 @@ impl Parser {
                     _ => AngleType::Degrees, // default to degrees if no unit specified
                  };
                 
-                Some(Expression::UnaryOp { func, operand: Box::new(operand), unit })
+                Some(Expression::TrigoOp { func, operand: Box::new(operand), unit })
             }
 
             Token::Convert => {
@@ -768,6 +921,21 @@ impl Parser {
                     Some(Expression::Assign { name, value: Box::new(value) })
                 } else {
                     None // invalid variable name
+                }
+            }
+
+            Token::Solve => {
+                self.consume();
+                self.skip_fillers();
+                if let Some(Token::Variable(name)) = self.peek().cloned() {
+                    self.consume();
+                    self.skip_fillers();
+                    let equation = self.parse_expression()?;
+                    Some(Expression::Solve{
+                        var: name,
+                        equation: Box::new(equation)})
+                } else {
+                    None
                 }
             }
 
@@ -839,7 +1007,8 @@ impl Parser {
             | Some(Token::To)
             | Some(Token::By) 
             | Some(Token::Of)
-            | Some(Token::Is) => { self.consume(); }  // ← removed The/Result/Of
+            | Some(Token::Is)
+            | Some(Token::In) => { self.consume(); }  // for "convert 30 degrees in radians"
             _ => break,
         }
     }
@@ -863,6 +1032,13 @@ pub fn evaluate_with_context(expr: &Expression, context: &mut VarContext) -> Res
             context.insert(name.clone(), value);
             Ok(value)
         },
+
+        Expression::UnaryOp { op, operand } => {
+            let value = evaluate_with_context(operand, context)?;
+            match op {
+                UnaryOperation::Factorial => Ok(factorial(value)),
+            }
+        }
 
         Expression::BinOp { op, left, right } => {
             let l = evaluate_with_context(left, context)?;
@@ -915,6 +1091,7 @@ pub fn evaluate_with_context(expr: &Expression, context: &mut VarContext) -> Res
                                 else { Err("Division by zero in conditional".to_string()) }
                             }
                             Operation::Power    => Ok(base_val.powf(v)),
+
                         }
                     }
                     _ => Ok(base_val),
@@ -939,7 +1116,8 @@ pub fn evaluate_with_context(expr: &Expression, context: &mut VarContext) -> Res
             Ok(result as u8 as f64) // return 1.0 for true, 0.0 for false
         }
     
-        Expression::UnaryOp { func, operand, unit } => {
+        // Trigonometric functions with unit handling
+        Expression::TrigoOp { func, operand, unit } => {
             let angle = evaluate_with_context(operand, context)?;
             compute_trigo_func(func, angle, unit)
         }
@@ -950,6 +1128,20 @@ pub fn evaluate_with_context(expr: &Expression, context: &mut VarContext) -> Res
                 (AngleType::Degrees, AngleType::Radians) => Ok(value * PI / 180.0),
                 (AngleType::Radians, AngleType::Degrees) => Ok(value * 180.0 / PI),
                 _ => Ok(value), // No conversion needed
+            }
+        }
+
+        Expression::Solve { var, equation} => {
+            match equation.as_ref() {
+                Expression::Comparison { op: CompareOp::EqualTo, left, right } => {
+                    let lhs_minus_rhs = Expression::BinOp{
+                        op: Operation::Subtract,
+                        left: left.clone(),
+                        right: right.clone(),
+                    };
+                    solve_linear(lhs_minus_rhs.clone(), var, 0.0).or_else(|_| solve_numerically(&lhs_minus_rhs, var, 1.0) )
+                }
+                _ => Err("Equation is required for anything to be solved".to_string()),
             }
         }
     }
