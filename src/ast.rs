@@ -682,11 +682,21 @@ impl Parser {
             }
         }
 
+        Some(left)
+    }
+
+    // handles operators that come immediately after a value, like factorial
+    fn parse_postfix(&mut self) -> Option<Expression> {
+        let mut left = self.parse_primary()?;
+
         loop {
             match self.peek() {
                 Some(Token::SingleDigitOp(UnaryOperation::Factorial)) => {
                     self.consume();
-                    left = Expression::UnaryOp { op: UnaryOperation::Factorial, operand: Box::new(left) };
+                    left = Expression::UnaryOp { 
+                        op: UnaryOperation::Factorial, 
+                        operand: Box::new(left)
+                     };
                 }
                 _ => break,
             }
@@ -696,8 +706,8 @@ impl Parser {
 
     // handles ^ with right-associativity
     fn parse_power(&mut self) -> Option<Expression> {
-        let mut left = self.parse_primary()?;
-
+        let mut left = self.parse_postfix()?;
+        
         loop{
             // Since Exponentiation is right-associative, we don't want to loop here like the others.
             // Instead, we check for the power operator and if it's there, we consume it and parse the right

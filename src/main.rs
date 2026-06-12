@@ -111,6 +111,7 @@ fn main(){
         "What is the value of x if x + 5 = 10",
         "What is the value of 3 + 3",
         "5!",
+        "solve x in x = 5! / 2",
 
     ];
 
