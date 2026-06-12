@@ -46,48 +46,56 @@ mod variable_finding {
         assert_approx_eq(compute("solve x in x * 0.5 = 2.5"), 5.0);
     }
 
-  #[test]
-fn test_solve_factorial_addition() {
-    assert_approx_eq(compute("solve x in x + 3! = 10"), 4.0);
-}
+    #[test]
+    fn test_solve_factorial_addition() {
+        assert_approx_eq(compute("solve x in x + 3! = 10"), 4.0);
+    }
 
-#[test]
-fn test_solve_factorial_division() {
-    assert_approx_eq(compute("solve x in x = 5! / 2"), 60.0);
-}
+    #[test]
+    fn test_solve_factorial_division() {
+        assert_approx_eq(compute("solve x in x = 5! / 2"), 60.0);
+    }
 
-#[test]
-fn test_solve_with_exponent() {
-    assert_approx_eq(compute("solve x in x * 2 ^ 3 = 32"), 4.0);
-}
+    #[test]
+    fn test_solve_with_exponent() {
+        assert_approx_eq(compute("solve x in x * 2 ^ 3 = 32"), 4.0);
+    }
 
-#[test]
-fn test_solve_with_trigonometry() {
-    assert_approx_eq(compute("solve x in x + sin 30 degrees = 5.5"), 5.0);
-}
+    #[test]
+    fn test_solve_with_trigonometry() {
+        assert_approx_eq(compute("solve x in x + sin 30 degrees = 5.5"), 5.0);
+    }
 
-#[test]
-fn test_solve_complex_rhs_expression() {
-    assert_approx_eq(compute("solve x in 2 * x = 10 + 5 * 2 - 4"), 8.0);
-}
+    #[test]
+    fn test_solve_complex_rhs_expression() {
+        assert_approx_eq(compute("solve x in 2 * x = 10 + 5 * 2 - 4"), 8.0);
+    }
 
-#[test]
-fn test_suffix_find_x() {
-    assert_approx_eq(compute("x = 5 + 10, find x"), 15.0);
-}
+    #[test]
+    fn test_suffix_find_x() {
+        assert_approx_eq(compute("x = 5 + 10, find x"), 15.0);
+    }
 
-#[test]
-fn test_suffix_solve_x() {
-    assert_approx_eq(compute("x * 3 = 27, solve x"), 9.0);
-}
+    #[test]
+    fn test_suffix_solve_x() {
+        assert_approx_eq(compute("x * 3 = 27, solve x"), 9.0);
+    }
 
-#[test]
-fn test_prefix_what_is_value_of_x() {
-    assert_approx_eq(compute("What is the value of x if x + 5 = 10"), 5.0);
-}
+    #[test]
+    fn test_prefix_what_is_value_of_x() {
+        assert_approx_eq(compute("What is the value of x if x + 5 = 10"), 5.0);
+    }
 
-#[test]
-fn test_natural_language_subtract_from_x() {
-    assert_approx_eq(compute("find x where subtract 3 from x equals 7"), 10.0);
-}
+    #[test]
+    fn test_natural_language_subtract_from_x() {
+        assert_approx_eq(compute("find x where subtract 3 from x equals 7"), 10.0);
+    }
+
+    #[test]
+    fn test_solve_shifted_sine() {
+        assert_approx_eq(
+            compute("solve x in sin(x + 30) = 0.5"),
+            0.0
+        );
+    }
 }

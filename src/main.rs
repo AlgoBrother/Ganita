@@ -112,6 +112,22 @@ fn main(){
         "What is the value of 3 + 3",
         "5!",
         "solve x in x = 5! / 2",
+        "solve x in x + sin 30 degrees = 5.5",
+        "solve x in x + 5! = 130",
+        "solve x in x + cos 60 degrees = 10.5",
+        "solve x in x = 2 ^ 5 + 8",
+        "solve x in x + (5! * 2 ^ 3) = 970",
+        "solve x in sin(x) = 0.5",
+        "solve x in sin(x) = 1",
+        "solve x in cos(x) = 0.5", // 1860, need to fix the normalization to principal value
+        "solve x in tan(x) = 1",
+        "solve x in sin(x) = -0.5",
+        "solve x in sin(x + 30) = 0.5",
+        "SIN 30 degrees",
+        "sin (x)^2 + cos(x) ^ 2 = 1", // expected: x is not found since the engine currently solves not proves
+        "sin 30 ^ 2 + cos 30 ^ 2",
+        "solve x in x^2 = 25",
+
 
     ];
 

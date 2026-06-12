@@ -217,30 +217,128 @@ mod trig_tests {
 
 
     // Ex 3.1 Q1(i): 25° → 5π/36 radians ≈ 0.4363
-#[test]
-fn convert_25_deg_to_rad() {
-    let result = compute("convert 25 degrees to radians").unwrap();
-    assert!(approx_eps(result, 25.0 * PI / 180.0, 1e-9));
-}
+    #[test]
+    fn convert_25_deg_to_rad() {
+        let result = compute("convert 25 degrees to radians").unwrap();
+        assert!(approx_eps(result, 25.0 * PI / 180.0, 1e-9));
+    }
 
-// Ex 3.1 Q1(ii): -47°30' = -47.5° → -19π/72 radians
-#[test]
-fn convert_neg_47_5_deg_to_rad() {
-    let result = compute("convert -47.5 degrees to radians").unwrap();
-    assert!(approx_eps(result, -47.5 * PI / 180.0, 1e-9));
-}
+    // Ex 3.1 Q1(ii): -47°30' = -47.5° → -19π/72 radians
+    #[test]
+    fn convert_neg_47_5_deg_to_rad() {
+        let result = compute("convert -47.5 degrees to radians").unwrap();
+        assert!(approx_eps(result, -47.5 * PI / 180.0, 1e-9));
+    }
 
-// Ex 3.1 Q1(iii): 240° → 4π/3 radians
-#[test]
-fn convert_240_deg_to_rad() {
-    let result = compute("convert 240 degrees to radians").unwrap();
-    assert!(approx_eps(result, 4.0 * PI / 3.0, 1e-9));
-}
+    // Ex 3.1 Q1(iii): 240° → 4π/3 radians
+    #[test]
+    fn convert_240_deg_to_rad() {
+        let result = compute("convert 240 degrees to radians").unwrap();
+        assert!(approx_eps(result, 4.0 * PI / 3.0, 1e-9));
+    }
 
-// Ex 3.1 Q2(i): 11/16 radians → degrees
-#[test]
-fn convert_11_over_16_rad_to_deg() {
-    let result = compute("convert 0.6875 radians to degrees").unwrap();
-    assert!(approx_eps(result, 0.6875 * 180.0 / PI, 1e-9));
-}
-}
+    // Ex 3.1 Q2(i): 11/16 radians → degrees
+    #[test]
+    fn convert_11_over_16_rad_to_deg() {
+        let result = compute("convert 0.6875 radians to degrees").unwrap();
+        assert!(approx_eps(result, 0.6875 * 180.0 / PI, 1e-9));
+    }
+
+    // Variable trignometric solving (not used refrence of NCERT, just added for coverage of variable solving + trigonometry)
+    #[test]
+    fn test_solve_sine_basic() {
+        assert!(
+            approx_eps(compute("solve x in sin(x) = 0.5").unwrap(), 30.0, 1e-9)    );
+    }
+            
+
+    #[test]
+    fn test_solve_sine_negative() {
+        assert!(
+            approx_eps(compute("solve x in sin(x) = -0.5").unwrap(), -30.0, 1e-9)
+        );
+    }
+
+    #[test]
+    fn test_solve_sine_one() {
+        assert!(
+            approx_eps(compute("solve x in sin(x) = 1").unwrap(), 90.0, 1e-9)
+        );
+    }
+
+    #[test]
+    fn test_solve_cosine_basic() {
+        assert!(
+            approx_eps(compute("solve x in cos(x) = 0.5").unwrap(), 60.0, 1e-9)
+        );
+    }
+
+    #[test]
+    fn test_solve_tangent_basic() {
+        assert!(
+            approx_eps(compute("solve x in tan(x) = 1").unwrap(), 45.0, 1e-9)
+        );
+    }
+
+    #[test]
+    fn test_solve_shifted_sine() {
+        assert!(
+            approx_eps(compute("solve x in sin(x + 30) = 0.5").unwrap(), 0.0, 1e-9)
+        );
+    }
+
+    #[test]
+    fn test_solve_shifted_cosine() {
+        assert!(
+            approx_eps(compute("solve x in cos(x + 60) = 0.5").unwrap(), 0.0, 1e-9)
+        );
+    }
+
+    #[test]
+    fn test_solve_scaled_sine() {
+        assert!(
+            approx_eps(compute("solve x in 2 * sin(x) = 1").unwrap(), 30.0, 1e-9)
+        );
+    }
+
+    #[test]
+    fn test_solve_sine_plus_constant() {
+        assert!(
+            approx_eps(compute("solve x in sin(x) + 1 = 1.5").unwrap(), 30.0, 1e-9)
+        );
+
+    }
+
+    #[test]
+    fn test_solve_arcsin() {
+        assert!(
+            approx_eps(compute("solve x in arcsin(x) = 30").unwrap(), 0.5, 1e-9)
+        );
+    }
+
+    #[test]
+    fn test_solve_arccos() {
+        assert!(
+            approx_eps(compute("solve x in arccos(x) = 60").unwrap(), 0.5, 1e-9)
+        );
+    }
+
+    #[test]
+    fn test_solve_arctan() {
+        assert!(
+            approx_eps(compute("solve x in arctan(x) = 45").unwrap(), 1.0, 1e-9)
+        );
+    }
+
+    #[test]
+    fn test_solve_multiple_solutions_sine() {
+        assert!(
+            approx_eps(compute("solve x in sin(x) = 0.5").unwrap(), 30.0, 1e-9)
+        );
+        // Principal solution only
+    }
+
+
+
+
+    }
