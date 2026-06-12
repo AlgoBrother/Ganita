@@ -54,6 +54,19 @@ Add six to the result of subtracting thirty from twenty, then multiply by three 
 ```text
 Add sixty seven to the result of subtracting hundred from thousand, then multiply it by three if the result is greater than or equal to 900
 ```
+---
+### Variable Finding
+* Solving for variables in simple equations
+Examples:
+```text
+solve x in x = 5! / 2 
+```
+```text
+What is the value of x if x + 5 = 10
+```
+```text
+solve x in (((((x + 1) + 2) + 3) + 4) + 5) = 20
+```
 
 ---
 ### Trigonometric Functions
