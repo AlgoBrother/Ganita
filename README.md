@@ -65,7 +65,15 @@ solve x in x = 5! / 2
 What is the value of x if x + 5 = 10
 ```
 ```text
-solve x in (((((x + 1) + 2) + 3) + 4) + 5) = 20
+Solve x in (((((x + 1) + 2) + 3) + 4) + 5) = 20
+```
+
+```text 
+Solve x in cos(x) = 0.5"
+```
+
+```text
+Solve x in sin(x + 30) = 0.5
 ```
 
 ---
