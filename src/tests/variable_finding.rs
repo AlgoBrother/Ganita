@@ -18,7 +18,6 @@ fn assert_approx_eq(left: Result<f64, String>, right: f64) {
 #[cfg(test)]
 mod variable_finding {
     use super::*;
-    use crate::math_engine::compute; // Make sure this path is correct for your project
 
     #[test]
     fn test_variable_finding_easy() {

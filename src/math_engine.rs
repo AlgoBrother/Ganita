@@ -1,4 +1,4 @@
-use crate::ast::{Parser, evaluate, evaluate_with_context};
+use crate::ast::{Parser, evaluate};
 use std::collections::HashMap;
 use lazy_static::lazy_static;
 
