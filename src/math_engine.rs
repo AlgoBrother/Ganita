@@ -87,8 +87,7 @@ pub fn normalise(text: &str) -> String {
 
     // normalize english phrases
     result = result.replace("to the power of", "^");
-      result = result.replace("to power of", "^");
-
+    result = result.replace("to power of", "^");
     // add spaces around operators
     for op in ["*", "/", "^", "(", ")"] {
         result = result.replace(op, &format!(" {} ", op));
