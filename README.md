@@ -133,6 +133,7 @@ radians
 * Word-to-number conversion
 * Nested expression evaluation
 * Trigonometric functions
+* Solving for Unknown variable (`x`)
 
 ### In Progress
 
