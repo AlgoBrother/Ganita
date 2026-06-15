@@ -1,6 +1,5 @@
 // A seperate trignometry module to handle all the trigonometric functions and calculations
 // This will help in keeping the code organized and modular 
-
 // CONSTANTS
 
 pub const PI: f64 = std::f64::consts::PI;

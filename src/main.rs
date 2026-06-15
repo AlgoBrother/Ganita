@@ -2,8 +2,8 @@ mod ast;
 mod math_engine;
 mod tests; 
 mod trignometry;
+mod utils;
 mod variable_solving;
-mod functions;
 use math_engine::{text_analyser};
 
 fn main(){
@@ -124,9 +124,17 @@ fn main(){
         "solve x in sin(x) = -0.5",
         "solve x in sin(x + 30) = 0.5",
         "SIN 30 degrees",
-        "sin (x)^2 + cos(x) ^ 2 = 1", // expected: x is not found since the engine currently solves not proves
+        "sin (x)^2 + cos(x)^2 = 1", // expected: x is not found since the engine currently solves not proves
         "sin 30 ^ 2 + cos 30 ^ 2",
         "solve x in x^2 = 25",
+        "2x + 4x = 12, solve for x",
+        "given y = 4, solve x in x + y = 10",
+        "x + x = 10, find x",
+        "2x",
+        "x^2 + 5x + 6 = 0 solve for x",
+        "x^2 + 1000x + 1 = 0, solve x",
+        "solve x in x^3 - 8 = 0 solve x",
+        "solve x in x^2 - 2 = 0 solve x"
 
 
     ];

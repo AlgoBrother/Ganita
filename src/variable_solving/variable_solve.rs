@@ -1,5 +1,4 @@
 // A seperate file for handling variable solving logic. 
-// variable_solve.rs
 use std::collections::HashMap;
 
 use crate::{ast::{Expression, Operation, evaluate_with_context}, trignometry::trigo::{AngleType, TrigonometricFunction}};
