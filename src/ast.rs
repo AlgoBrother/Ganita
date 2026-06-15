@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{math_engine::{VarContext, is_number_word, word_to_number}, trignometry::trigo::{TrigonometricFunction, compute_trigo_func}, variable_solving::variable_solve::{solve_linear, solve_numerically}};
 use crate::trignometry::trigo::{AngleType, PI};
-use crate::functions::factorial;
+use crate::utils::functions::factorial;
 
 #[derive(Debug, Clone)]
 pub enum Expression {
@@ -152,6 +152,8 @@ pub fn tokenize(input: &str) -> Vec<Token> {
 
 
         // ── Step 1: check raw word as a symbol or keyword first ──────────
+
+        
         match word_lower.as_str() {
             // if block for checking text like 5! factorial operation support
             _ if word_lower.ends_with('!') && word_lower.len() > 1 => {
@@ -159,6 +161,16 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 if let Ok(num) = num_part.parse::<f64>() {
                     tokens.push(Token::Number(num));
                     tokens.push(Token::SingleDigitOp(UnaryOperation::Factorial));
+                    i += 1;
+                    continue;
+                }
+            }
+
+            _ if word_lower.ends_with('x') && word_lower.len() > 1 => {
+                let num_part = &word_lower[..word_lower.len()-1]; // strip the trailing 'x' to support inputs like "5x" as "5 * x"
+                if let Ok(num) = num_part.parse::<f64>() {
+                    tokens.push(Token::Number(num));
+                    tokens.push(Token::Variable("x".to_string()));
                     i += 1;
                     continue;
                 }
@@ -673,6 +685,17 @@ impl Parser {
                     let right = self.parse_power()?;
                     left = Expression::BinOp {
                         op: Operation::Divide,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    };
+                }
+
+                Some(Token::Variable(_) | Token::Sin | Token::Cos | Token::Tan | Token::Cosec | Token::Sec | Token::Cot | Token::Arcsin | Token::Arccos | Token::Arctan | Token::LParenthesis) => {
+                    // Handle implicit multiplication: e.g. "2x", "3sin(30)", "(x+1)(x-1)"
+                    self.skip_fillers();
+                    let right = self.parse_power()?;
+                    left = Expression::BinOp {
+                        op: Operation::Multiply,
                         left: Box::new(left),
                         right: Box::new(right),
                     };
