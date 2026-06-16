@@ -3,6 +3,8 @@ use std::collections::HashMap;
 
 use crate::{ast::{Expression, Operation, evaluate_with_context}, trignometry::trigo::{AngleType, TrigonometricFunction}};
 
+type VariableContext = HashMap<String, f64>; // A context for variable values during evaluation and context lookups to avoid repeated allocations
+
 fn contains_var(expr: &Expression, var: &str) -> bool {
     match expr {
         Expression::Variable(name) => name == var,
@@ -39,7 +41,7 @@ fn contains_trig(expr: &Expression) -> bool {
     }
 }
 
-pub fn solve_linear(expr: Expression, var: &str, target: f64) -> Result<f64, String> {
+pub fn solve_linear(expr: Expression, var: &str, target: f64, context: &VariableContext) -> Result<f64, String> {
     match expr {
         Expression::Variable(name) if name == var => Ok(target),
 
@@ -47,11 +49,11 @@ pub fn solve_linear(expr: Expression, var: &str, target: f64) -> Result<f64, Str
             let left_contains_var = contains_var(&left, var);
             let right_contains_var = contains_var(&right, var);
             if left_contains_var && !right_contains_var {
-                let b = evaluate_with_context(&right, &mut HashMap::new())?; 
-                solve_linear(*left, var, target - b)
+                let b = evaluate_with_context(&right, context)?;
+                solve_linear(*left, var, target - b, context)
             } else if right_contains_var && !left_contains_var {
-                let b = evaluate_with_context(&left, &mut HashMap::new())?;
-                solve_linear(*right, var, target - b)
+                let b = evaluate_with_context(&left, context)?;
+                solve_linear(*right, var, target - b, context)
             } else {
                 Err("Cannot solve algebraically: variable appears on both sides".to_string())
             }
@@ -61,11 +63,11 @@ pub fn solve_linear(expr: Expression, var: &str, target: f64) -> Result<f64, Str
             let left_contains_var = contains_var(&left, var);
             let right_contains_var = contains_var(&right, var);
             if left_contains_var && !right_contains_var {
-                let b = evaluate_with_context(&right, &mut HashMap::new())?;
-                solve_linear(*left, var, target + b)
+                let b = evaluate_with_context(&right, context)?;
+                solve_linear(*left, var, target + b, context)
             } else if right_contains_var && !left_contains_var {
-                let a = evaluate_with_context(&left, &mut HashMap::new())?;
-                solve_linear(*right, var, a - target)
+                let a = evaluate_with_context(&left, context)?;
+                solve_linear(*right, var, a - target, context)
             } else {
                 Err("Cannot solve algebraically: variable appears on both sides".to_string())
             }
@@ -75,13 +77,13 @@ pub fn solve_linear(expr: Expression, var: &str, target: f64) -> Result<f64, Str
             let left_contains_var = contains_var(&left, var);
             let right_contains_var = contains_var(&right, var);
             if left_contains_var && !right_contains_var {
-                let a = evaluate_with_context(&right, &mut HashMap::new())?;
+                let a = evaluate_with_context(&right, context)?;
                 if a.abs() < 1e-10 { return Err("Cannot divide by zero coefficient".to_string()); }
-                solve_linear(*left, var, target / a)
+                solve_linear(*left, var, target / a, context)
             } else if right_contains_var && !left_contains_var {
-                let a = evaluate_with_context(&left, &mut HashMap::new())?;
+                let a = evaluate_with_context(&left, context)?;
                 if a.abs() < 1e-10 { return Err("Cannot divide by zero coefficient".to_string()); }
-                solve_linear(*right, var, target / a)
+                solve_linear(*right, var, target / a, context)
             } else {
                 Err("Cannot solve algebraically: nonlinear multiplication".to_string())
             }
@@ -94,14 +96,14 @@ pub fn solve_linear(expr: Expression, var: &str, target: f64) -> Result<f64, Str
             
             if left_contains_var && !right_contains_var {
                 // x ^ n = target -> x = target ^ (1/n)
-                let exponent = evaluate_with_context(&right, &mut HashMap::new())?;
+                let exponent = evaluate_with_context(&right, context)?;
                 if exponent == 0.0 { return Err("Math error: zero exponent".to_string()); }
                 if target < 0.0 && exponent % 2.0 == 0.0 {
                     return Err("Math error: Even root of a negative number".to_string());
                 }
                 
                 let new_target = target.powf(1.0 / exponent);
-                solve_linear(*left, var, new_target)
+                solve_linear(*left, var, new_target, context)
             } else if right_contains_var && !left_contains_var {
                 // n ^ x = target -> x = ln(target) / ln(n)
                 let base = evaluate_with_context(&left, &mut HashMap::new())?;
@@ -109,7 +111,7 @@ pub fn solve_linear(expr: Expression, var: &str, target: f64) -> Result<f64, Str
                 if target <= 0.0 { return Err("Math error: Log of non-positive number".to_string()); }
                 
                 let new_target = target.ln() / base.ln();
-                solve_linear(*right, var, new_target)
+                solve_linear(*right, var, new_target, context)
             } else {
                 Err("Cannot solve algebraically: variable in both base and exponent".to_string())
             }
@@ -159,7 +161,7 @@ pub fn solve_linear(expr: Expression, var: &str, target: f64) -> Result<f64, Str
             // Snap to clean numbers to avoid floating point drift (e.g., 29.999999999999996 -> 30.0)
             let cleaned_target = (new_target * 10000.0).round() / 10000.0;
 
-            solve_linear(*operand, var, cleaned_target)
+            solve_linear(*operand, var, cleaned_target, context)
         }
 
         _ => Err(format!("Cannot isolate variable algebraically in: {:#?}", expr))
