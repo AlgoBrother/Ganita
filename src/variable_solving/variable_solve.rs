@@ -38,7 +38,7 @@ fn contains_trig(expr: &Expression) -> bool {
         Expression::Variable(_) => false,
         Expression::Assign { .. } => false,
         Expression::Solve { .. } => false,
-        Expression::Multivariable_Solve {..} => false,
+        Expression::MultivariableSolve {..} => false,
     }
 }
 

@@ -81,7 +81,7 @@ pub enum Expression {
         equation: Box<Expression>,
     },
 
-    Multivariable_Solve { // for future extension with multivariable solving, e.g. "Solve for x and y: 2x + 3y = 5, x - y = 1"
+    MultivariableSolve { // for future extension with multivariable solving, e.g. "Solve for x and y: 2x + 3y = 5, x - y = 1"
         vars: Vec<String>,
         equations: Vec<Expression>,
     }
@@ -880,7 +880,7 @@ impl Parser {
                             extract_vars(eq, &mut target_vars);
                         }
                         
-                        exprs.push(Expression::Multivariable_Solve {
+                        exprs.push(Expression::MultivariableSolve {
                             vars: target_vars,
                             equations: pending_equations.clone(),
                         });
@@ -1290,7 +1290,7 @@ pub fn evaluate_with_context(expr: &Expression, context: &VarContext) -> Result<
             }
         }
 
-        Expression::Multivariable_Solve { vars, equations } => {
+        Expression::MultivariableSolve { vars, equations } => {
             let solved_map = crate::variable_solving::variable_solve::solve_system_numerically(
                 equations, 
                 vars, 

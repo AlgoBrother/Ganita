@@ -1,4 +1,7 @@
-use crate::ast::{Parser, evaluate, evaluate_with_context, Expression};
+use crate::ast::{Parser};
+
+#[cfg(test)]
+use crate::ast::{Expression, evaluate_with_context};
 use crate::utils::context::MathContext;
 use std::collections::HashMap;
 use lazy_static::lazy_static;
