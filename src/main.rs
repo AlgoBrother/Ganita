@@ -134,8 +134,14 @@ fn main(){
         "x^2 + 5x + 6 = 0 solve for x",
         "x^2 + 1000x + 1 = 0, solve x",
         "solve x in x^3 - 8 = 0 solve x",
-        "solve x in x^2 - 2 = 0 solve x"
-
+        "solve x in x^2 - 2 = 0 solve x",
+        "Let a = 30. Find x such that sin(x + a) = 0.5.",
+        "Add 50 and 50, then multiply by 2 if the result is greater than 100, then subtract 20 unless the result is negative",
+        "Solve x in x^2 + sin(x) = 2.",
+        "Let x = 5, Let y = x + 10, solve z in z = x + y",
+        "Let a = 10, Let b = 20, solve x in x + a = b, Let a = 5, solve x in x + a = b",
+        "y = 2 * x, x + y = 9, solve for x",
+        "Let a = 10, Let b = 20, solve x in x + a = b, Let a = 5, solve x in x + a = b",
 
     ];
 

@@ -1,4 +1,5 @@
-use crate::ast::{Parser, evaluate};
+use crate::ast::{Parser, evaluate, evaluate_with_context, Expression};
+use crate::utils::context::MathContext;
 use std::collections::HashMap;
 use lazy_static::lazy_static;
 
@@ -88,8 +89,13 @@ pub fn normalise(text: &str) -> String {
     // normalize english phrases
     result = result.replace("to the power of", "^");
     result = result.replace("to power of", "^");
-    // add spaces around operators
-    for op in ["*", "/", "^", "(", ")"] {
+    
+    // Safely turn sentence-ending periods into commas so they act as separators,
+    // without breaking decimals like 0.5!
+    result = result.replace(". ", " , ");
+
+    // add spaces around operators AND separators
+    for op in ["*", "/", "^", "(", ")", ",", ";"] {
         result = result.replace(op, &format!(" {} ", op));
     }
 
@@ -101,18 +107,94 @@ pub fn normalise(text: &str) -> String {
 
     result
 }
-
 // ========= Main compute function and text analyser for debugging =======
+
+pub struct MathEngine{
+    context: MathContext,
+}
+
+impl MathEngine{
+    pub fn new() -> Self{
+        MathEngine{
+            context: MathContext::new(),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn compute(&mut self, text: &str) -> Result<f64, String> {
+        let normalised_text = normalise(text);
+        let tokens = crate::ast::tokenize(&normalised_text);
+        let mut parser = Parser::new(tokens);
+        
+        // parse_sequence returns Vec<Expression> for comma-separated inputs
+        // "y = 4, solve x in x + y = 10" → [Assign(y,4), Solve(x, x+y=10)]
+        match parser.parse_sequence() {
+            Some(exprs) if !exprs.is_empty() => {
+                let mut last = 0.0;
+                for expr in &exprs {
+                    match expr {
+                        Expression::Assign { name, value } => {
+                            let val = evaluate_with_context(value, self.context.get_variable())?;
+                            self.context.set(name, val);
+                            last = val;
+                        }
+                        _ => {
+                            last = evaluate_with_context(expr, self.context.get_variable())?;
+                        }
+                    }
+                }
+                Ok(last)
+            }
+            _ => Err("Could not parse expression".to_string()),
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.context = MathContext::new(); // resets user vars but keeps constants
+    }
+}
 
 // Inner function to compute the result and also return the AST for debugging purposes. This is used by both the main text_analyser and the compute function (we ignore the ast formation in tests/test results))
 fn compute_inner(text: &str) -> (Option<crate::ast::Expression>, Result<f64, String>) {
     let normalised_text = &normalise(text);
     let tokens = crate::ast::tokenize(normalised_text);
     let mut parser = Parser::new(tokens);
-    match parser.parse_expression() {
-        Some(ast) => {
-            let result = evaluate(&ast);
-            (Some(ast), result)
+    
+    // Create a temporary context for the debugger to use so assignments pass forward
+    let mut temp_context = HashMap::new();
+
+    match parser.parse_sequence() {
+        Some(exprs) if exprs.len() > 1 => {
+            let mut last_res = 0.0;
+            let mut res_ok = Ok(0.0);
+            
+            for expr in &exprs {
+                match expr {
+                    crate::ast::Expression::Assign { name, value } => {
+                        let val = crate::ast::evaluate_with_context(value, &temp_context);
+                        if let Ok(v) = val {
+                            temp_context.insert(name.clone(), v);
+                            last_res = v;
+                            res_ok = Ok(v);
+                        } else {
+                            res_ok = val;
+                            break;
+                        }
+                    }
+                    _ => {
+                        let val = crate::ast::evaluate_with_context(expr, &temp_context);
+                        if let Ok(v) = val { last_res = v; res_ok = Ok(v); } 
+                        else { res_ok = val; break; }
+                    }
+                }
+            }
+            let last_expr = exprs.last().cloned();
+            (last_expr, res_ok)
+        }
+        Some(exprs) => {
+            let expr = exprs.into_iter().next().unwrap();
+            let result = crate::ast::evaluate_with_context(&expr, &temp_context);
+            (Some(expr), result)
         }
         None => (None, Err("Could not parse expression".to_string())),
     }
@@ -121,9 +203,7 @@ fn compute_inner(text: &str) -> (Option<crate::ast::Expression>, Result<f64, Str
 #[cfg(test)]
 // This is the main compute function that will be used in tests directory. It just returns the result and ignores the AST.
 pub fn compute(text: &str) -> Result<f64, String> {
-    // compute_with_context(text, &mut HashMap::new())
-    let (_, result) = compute_inner(text); // we ignore the AST and just return the result
-    result
+    MathEngine::new().compute(text)
 }
 
 

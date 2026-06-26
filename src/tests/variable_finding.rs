@@ -99,3 +99,84 @@ mod variable_finding {
         );
     }
 }
+
+#[cfg(test)]
+mod multivariable_solving_tests {
+    use crate::math_engine::compute;
+
+    // Helper function for 4 decimal place precision matching
+    fn assert_approx_eq(left: Result<f64, String>, right: f64) {
+        match left {
+            Ok(val) => {
+                let rounded_left = (val * 10000.0).round() / 10000.0;
+                let rounded_right = (right * 10000.0).round() / 10000.0;
+                assert_eq!(rounded_left, rounded_right);
+            }
+            Err(e) => panic!("Expected Ok, got Err: {:?}", e),
+        }
+    }
+
+    // ── Tier 1: Sequential Variable Chaining ───────────────────
+    
+    #[test]
+    fn test_sequential_dependency() {
+        // Core context lookup: y depends on x, z depends on both
+        assert_approx_eq(compute("Let x = 5, Let y = x + 10, solve z in z = x + y"), 20.0);
+    }
+
+    #[test]
+    fn test_variable_redefinition_scoping() {
+        // Validates that variables can safely mutate or overwrite state down the sequence chain
+        assert_approx_eq(compute("Let a = 10, Let b = 20, solve x in x + a = b, Let a = 5, solve x in x + a = b"), 15.0);
+    }
+
+    #[test]
+    fn test_recursive_context_assignment() {
+        // Self-referential variable updates
+        assert_approx_eq(compute("Let x = 10, Let x = x + 5, solve y in y = x * 2"), 30.0);
+    }
+
+    // ── Tier 2: Linear Simultaneous Systems ────────────────────
+    
+    #[test]
+    fn test_simultaneous_linear_substitution() {
+        // Classic system: y = 2x and x + y = 9 -> 3x = 9 -> x = 3
+        // This validates if your pending equation accumulator functions properly
+        assert_approx_eq(compute("y = 2 * x, x + y = 9, solve for x"), 3.0);
+    }
+
+    #[test]
+    fn test_simultaneous_linear_two_variables() {
+        // x + y = 10, x - y = 2 -> 2x = 12 -> x = 6
+        assert_approx_eq(compute("x + y = 10, x - y = 2, solve for x"), 6.0);
+    }
+
+    // ── Tier 3: Non-Linear Multivariable Systems ───────────────
+    
+    #[test]
+    fn test_mixed_multivariable_trig() {
+        // Combines structural context mapping with your recursive trigonometric tracking
+        assert_approx_eq(compute("Let angle = 30, solve x in sin(x + angle) = 0.5"), 0.0);
+    }
+
+    #[test]
+    fn test_nonlinear_simultaneous_system() {
+        // Optimization fallback test: x^2 + y = 7 and y - x = 1
+        // Substituting y = x + 1 -> x^2 + x - 6 = 0 -> positive real root x = 2
+        assert_approx_eq(compute("x ^ 2 + y = 7, y - x = 1, solve for x"), 2.0);
+    }
+
+    // ── Tier 4: Error Scenarios ────────────────────────────────
+    
+    #[test]
+    fn test_underdetermined_system_error() {
+        // Infinite solutions: engine should gracefully error or fail to converge
+        assert!(compute("x + y = 10, solve x").is_err());
+    }
+
+    #[test]
+    fn test_unsolvable_contradictory_system() {
+        // Parallel lines: no real solution possible
+        assert!(compute("x + y = 5, x + y = 10, solve x").is_err());
+    }
+}

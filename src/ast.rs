@@ -4,6 +4,32 @@ use crate::{math_engine::{VarContext, is_number_word, word_to_number}, trignomet
 use crate::trignometry::trigo::{AngleType, PI};
 use crate::utils::functions::factorial;
 
+pub fn extract_vars(expr: &Expression, vars: &mut Vec<String>) {
+    match expr {
+        Expression::Variable(name) => {
+            if !vars.contains(name) { vars.push(name.clone()); }
+        }
+        Expression::BinOp { left, right, .. } | Expression::Comparison { left, right, .. } => {
+            extract_vars(left, vars);
+            extract_vars(right, vars);
+        }
+        Expression::TrigoOp { operand, .. } | Expression::UnaryOp { operand, .. } | Expression::Convert { operand, .. } => {
+            extract_vars(operand, vars);
+        }
+        Expression::Conditional { base, guarded_val, .. } => {
+            extract_vars(base, vars);
+            if let Some(val) = guarded_val { extract_vars(val, vars); }
+        }
+        Expression::Assign { value, .. } => {
+            extract_vars(value, vars);
+        }
+        Expression::Solve { equation, .. } => {
+            extract_vars(equation, vars);
+        }
+        _ => {}
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Expression {
     Number(f64),
@@ -53,6 +79,11 @@ pub enum Expression {
     Solve {
         var: String,
         equation: Box<Expression>,
+    },
+
+    Multivariable_Solve { // for future extension with multivariable solving, e.g. "Solve for x and y: 2x + 3y = 5, x - y = 1"
+        vars: Vec<String>,
+        equations: Vec<Expression>,
     }
 }
 
@@ -122,6 +153,8 @@ pub enum Token {
     LParenthesis,
     RParenthesis,
 
+    Seperator,
+
     Sin, 
     Cos,
     Tan,
@@ -189,6 +222,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             "!=" => { tokens.push(Token::Cmp(CompareOp::NotEqualTo)); i += 1; continue; }
             "<=" => { tokens.push(Token::Cmp(CompareOp::LessThanOrEqualTo)); i += 1; continue; }
             ">=" => { tokens.push(Token::Cmp(CompareOp::GreaterThanOrEqualTo)); i += 1; continue; }
+            "," | ";" => { tokens.push(Token::Seperator); i += 1; continue; }
             "!" => {
                 if raw.get(i + 1) == Some(&"=") {
                     tokens.push(Token::Cmp(CompareOp::NotEqualTo));
@@ -335,7 +369,8 @@ pub fn tokenize(input: &str) -> Vec<Token> {
 
             "pi" | "π" => tokens.push(Token::Number(std::f64::consts::PI)),
 
-            "where" | "such" | "that" | "what" | "value" => {} // equation introducers, silently skip
+            // In tokenizer silent skip list:
+            "where" | "with" | "such" | "that" | "what" | "value" | "given" | "it" | "sum" | "for" | "at" | "on" | "an" | "no" => {} // equation introducers, silently skip
 
             _ => {
                 if let Ok(num) = word.parse::<f64>() {
@@ -376,9 +411,12 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                         }
                     }
 
-                    if word.len() == 1 && word.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false){
+                    // if word.len() == 1 && word.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false){
+                    //     tokens.push(Token::Variable(word.to_string()));
+                    // } 
+                    if word.chars().all(|c| c.is_ascii_alphabetic()) && !word.is_empty() {
                         tokens.push(Token::Variable(word.to_string()));
-                    } 
+                    }
                 }
                 // unknown words silently skipped
             }
@@ -428,15 +466,13 @@ impl Parser {
     }
 
     // ── Top-level entry: parse expression then check for Unless ──────────
-    pub fn parse_expression(&mut self) -> Option<Expression> {
-        // First check if the input STARTS with Solve token
-        // "find x where/such/that ..." — prefix form
+   pub fn parse_expression(&mut self) -> Option<Expression> {
         if matches!(self.peek(), Some(Token::Solve)) {
             self.consume();
             self.skip_fillers();
             if let Some(Token::Variable(var_name)) = self.peek().cloned() {
                 self.consume();
-                self.skip_fillers(); // eats "where", "such", "that", "in"
+                self.skip_fillers(); 
                 let equation = self.parse_comparison_then_conditional()?;
                 return Some(Expression::Solve {
                     var: var_name,
@@ -445,28 +481,44 @@ impl Parser {
             }
         }
 
-        // Parse the full expression normally (handles all existing cases)
         let mut expr = self.parse_comparison_then_conditional()?;
 
-        // After the main expression is parsed, check for solve patterns
-        // "x + 9 = 0, find x" — suffix form
-        // Comma is stripped by tokenizer, so we just check for Solve token
+        let saved_pos = self.pos; 
+        
+        // Skip optional separator before suffix solve
+        if matches!(self.peek(), Some(Token::Seperator)) {
+            self.consume();
+        }
+
+        let mut matched_suffix_solve = false;
         if matches!(self.peek(), Some(Token::Solve)) {
-            // existing suffix solve handling
             self.consume();
             self.skip_fillers();
             if let Some(Token::Variable(var_name)) = self.peek().cloned() {
                 self.consume();
-                expr = Expression::Solve { var: var_name, equation: Box::new(expr) };
+                
+                // Only trigger suffix solve if it's the actual end of the clause.
+                // If there's an 'In', 'Sin', or another number next, it's a prefix solve!
+                if self.peek().is_none() || matches!(self.peek(), Some(Token::Seperator)) {
+                    expr = Expression::Solve { var: var_name, equation: Box::new(expr) };
+                    matched_suffix_solve = true;
+                }
             }
-        } else if matches!(self.peek(), Some(Token::If)) {
-            // "x if x + 5 = 10" — the variable is already in expr as Variable("x")
-            if let Expression::Variable(var_name) = &expr {
-                let var_name = var_name.clone();
-                self.consume(); // eat If
-                self.skip_fillers();
-                let equation = self.parse_comparison_then_conditional()?;
-                expr = Expression::Solve { var: var_name, equation: Box::new(equation) };
+        }
+
+        // Backtrack if it wasn't a valid suffix solve
+        if !matched_suffix_solve {
+            self.pos = saved_pos; 
+            
+            // Existing "If" conditional logic
+            if matches!(self.peek(), Some(Token::If)) {
+                if let Expression::Variable(var_name) = &expr {
+                    let var_name = var_name.clone();
+                    self.consume(); // eat If
+                    self.skip_fillers();
+                    let equation = self.parse_comparison_then_conditional()?;
+                    expr = Expression::Solve { var: var_name, equation: Box::new(equation) };
+                }
             }
         }
         Some(expr)
@@ -479,6 +531,14 @@ impl Parser {
         loop {
             let mut then_op: Option<Operation> = None;
             let mut then_val: Option<Expression> = None;
+
+            let saved_pos = self.pos; // Save state in case the "then" is not followed by a valid operation and we need to backtrack
+            if matches!(self.peek(), Some(Token::Seperator)) {
+                 self.consume();
+                 if !matches!(self.peek(), Some(Token::Then)) {
+                     self.pos = saved_pos; // backtrack if it wasn't a comma-then
+                 }
+            }
 
             while matches!(self.peek(), Some(Token::Then)) {
                 self.consume();
@@ -794,6 +854,64 @@ impl Parser {
         }
     }
 
+    pub fn parse_sequence(&mut self) -> Option<Vec<Expression>> {
+        let mut exprs = Vec::new();
+        let mut pending_equations = Vec::new();
+
+        loop {
+            while matches!(self.peek(), Some(Token::Seperator)) {
+                self.consume();
+            }
+
+            if self.peek().is_none() { break; }
+
+            match self.parse_expression() {
+                Some(Expression::Solve { var, equation }) => {
+                    if !pending_equations.is_empty() {
+                        // Gather any hanging conditions
+                        if let Expression::Comparison { .. } = *equation {
+                            pending_equations.push(*equation);
+                        }
+                        
+                        let mut target_vars = vec![var.clone()];
+                        
+                        // Auto-populate hidden variables from all pooled equations!
+                        for eq in &pending_equations {
+                            extract_vars(eq, &mut target_vars);
+                        }
+                        
+                        exprs.push(Expression::Multivariable_Solve {
+                            vars: target_vars,
+                            equations: pending_equations.clone(),
+                        });
+                        pending_equations.clear();
+                    } else {
+                        exprs.push(Expression::Solve { var, equation });
+                    }
+                }
+                Some(Expression::Comparison { op, left, right }) => {
+                    pending_equations.push(Expression::Comparison { op, left, right });
+                }
+                Some(expr) => {
+                    exprs.push(expr);
+                }
+                None => break,
+            }
+
+            if !matches!(self.peek(), Some(Token::Seperator)) {
+                break;
+            }
+        }
+
+        if exprs.is_empty() && pending_equations.is_empty() { 
+            None 
+        } else if !exprs.is_empty() { 
+            Some(exprs) 
+        } else { 
+            Some(pending_equations) 
+        }
+    }
+    
     // primary: terminal values and prefix operators
     fn parse_primary(&mut self) -> Option<Expression> {
         self.skip_fillers();
@@ -1052,7 +1170,7 @@ impl Parser {
 // EVALUATOR
 // ──────────────────────────────────────────────
 
-pub fn evaluate_with_context(expr: &Expression, context: &mut VarContext) -> Result<f64, String> {
+pub fn evaluate_with_context(expr: &Expression, context: &VarContext) -> Result<f64, String> {
     match expr {
         Expression::Number(n) => Ok(*n),
 
@@ -1060,10 +1178,9 @@ pub fn evaluate_with_context(expr: &Expression, context: &mut VarContext) -> Res
             context.get(name).copied().ok_or_else(|| format!("{} Variable not found", name))
         },
 
-        Expression::Assign { name, value } => {
-            let value = evaluate_with_context(value, context)?;
-            context.insert(name.clone(), value);
-            Ok(value)
+        // Assign just returns the value - context building is handled separately
+        Expression::Assign { name: _, value } => {
+            evaluate_with_context(value, context)
         },
 
         Expression::UnaryOp { op, operand } => {
@@ -1092,9 +1209,9 @@ pub fn evaluate_with_context(expr: &Expression, context: &mut VarContext) -> Res
             let base_val = evaluate_with_context(base, context)?;
 
             let should_apply_guarded_op = match condition {
-                Condition::IsNegative => base_val >= 0.0,  // apply when NOT negative
-                Condition::IsPositive => base_val <= 0.0,  // apply when NOT positive
-                Condition::IsZero    => base_val != 0.0,  // apply when NOT zero
+                Condition::IsNegative => base_val >= 0.0,
+                Condition::IsPositive => base_val <= 0.0,
+                Condition::IsZero    => base_val != 0.0,
                 Condition::Comparison { op, threshold, polarity } => {
                     let raw = match op {
                         CompareOp::GreaterThan          => base_val > *threshold,
@@ -1104,14 +1221,11 @@ pub fn evaluate_with_context(expr: &Expression, context: &mut VarContext) -> Res
                         CompareOp::GreaterThanOrEqualTo => base_val >= *threshold,
                         CompareOp::LessThanOrEqualTo    => base_val <= *threshold,
                     };
-                    // "if"     (polarity=true)  → apply when raw is true
-                    // "unless" (polarity=false) → apply when raw is false
                     if *polarity { raw } else { !raw }
                 }
             };
 
             if should_apply_guarded_op {
-                // condition says yes — apply the guarded operation
                 match (guarded_op, guarded_val) {
                     (Some(op), Some(val)) => {
                         let v = evaluate_with_context(val, context)?;
@@ -1124,13 +1238,11 @@ pub fn evaluate_with_context(expr: &Expression, context: &mut VarContext) -> Res
                                 else { Err("Division by zero in conditional".to_string()) }
                             }
                             Operation::Power    => Ok(base_val.powf(v)),
-
                         }
                     }
                     _ => Ok(base_val),
                 }
             } else {
-                // condition says no — return base unchanged
                 Ok(base_val)
             }
         }
@@ -1141,15 +1253,14 @@ pub fn evaluate_with_context(expr: &Expression, context: &mut VarContext) -> Res
             let result = match op {
                 CompareOp::GreaterThan => lv > rv,
                 CompareOp::LessThan => lv < rv,
-                CompareOp::EqualTo => (lv - rv).abs() < 1e-9, // handle floating-point equality with a tolerance we do this instead of == to avoid issues where two numbers are mathematically equal but differ in their last decimal places due to floating-point precision limitations
+                CompareOp::EqualTo => (lv - rv).abs() < 1e-9,
                 CompareOp::NotEqualTo => (lv - rv).abs() >= 1e-9,
                 CompareOp::GreaterThanOrEqualTo => lv >= rv,
                 CompareOp::LessThanOrEqualTo => lv <= rv,
             };
-            Ok(result as u8 as f64) // return 1.0 for true, 0.0 for false
+            Ok(result as u8 as f64)
         }
     
-        // Trigonometric functions with unit handling
         Expression::TrigoOp { func, operand, unit } => {
             let angle = evaluate_with_context(operand, context)?;
             compute_trigo_func(func, angle, unit)
@@ -1160,11 +1271,11 @@ pub fn evaluate_with_context(expr: &Expression, context: &mut VarContext) -> Res
             match (from, to) {
                 (AngleType::Degrees, AngleType::Radians) => Ok(value * PI / 180.0),
                 (AngleType::Radians, AngleType::Degrees) => Ok(value * 180.0 / PI),
-                _ => Ok(value), // No conversion needed
+                _ => Ok(value),
             }
         }
 
-        Expression::Solve { var, equation} => {
+        Expression::Solve { var, equation } => {
             match equation.as_ref() {
                 Expression::Comparison { op: CompareOp::EqualTo, left, right } => {
                     let lhs_minus_rhs = Expression::BinOp{
@@ -1172,14 +1283,55 @@ pub fn evaluate_with_context(expr: &Expression, context: &mut VarContext) -> Res
                         left: left.clone(),
                         right: right.clone(),
                     };
-                    solve_linear(lhs_minus_rhs.clone(), var, 0.0).or_else(|_| solve_numerically(&lhs_minus_rhs, var, 1.0) )
+                    solve_linear(lhs_minus_rhs.clone(), var, 0.0, context)
+                        .or_else(|_| solve_numerically(&lhs_minus_rhs, var, 1.0, context))
                 }
                 _ => Err("Equation is required for anything to be solved".to_string()),
+            }
+        }
+
+        Expression::Multivariable_Solve { vars, equations } => {
+            let solved_map = crate::variable_solving::variable_solve::solve_system_numerically(
+                equations, 
+                vars, 
+                context
+            )?;
+            
+            // Return the first requested variable from the solution map
+            if let Some(target_var) = vars.first() {
+                solved_map.get(target_var)
+                    .copied()
+                    .ok_or_else(|| "Target variable solution missing".to_string())
+            } else {
+                Err("No solve targets specified".to_string())
             }
         }
     }
 }
 
+/// Process a sequence of expressions, handling assignments and building context
+/// This is the main entry point for multi-expression inputs like "y = 4, solve x in x + y = 10"
+pub fn evaluate_sequence(exprs: &[Expression]) -> Result<f64, String> {
+    let mut context = HashMap::new();
+    let mut last_result = 0.0;
+    
+    for expr in exprs {
+        match expr {
+            Expression::Assign { name, value } => {
+                let val = evaluate_with_context(value, &context)?;
+                context.insert(name.clone(), val);
+                last_result = val;
+            }
+            _ => {
+                last_result = evaluate_with_context(expr, &context)?;
+            }
+        }
+    }
+    
+    Ok(last_result)
+}
+
+/// Simple evaluate for single expressions (no context needed)
 pub fn evaluate(expr: &Expression) -> Result<f64, String> {
-    evaluate_with_context(expr, &mut HashMap::new())
+    evaluate_with_context(expr, &HashMap::new())
 }

@@ -38,6 +38,7 @@ fn contains_trig(expr: &Expression) -> bool {
         Expression::Variable(_) => false,
         Expression::Assign { .. } => false,
         Expression::Solve { .. } => false,
+        Expression::Multivariable_Solve {..} => false,
     }
 }
 
@@ -106,7 +107,7 @@ pub fn solve_linear(expr: Expression, var: &str, target: f64, context: &Variable
                 solve_linear(*left, var, new_target, context)
             } else if right_contains_var && !left_contains_var {
                 // n ^ x = target -> x = ln(target) / ln(n)
-                let base = evaluate_with_context(&left, &mut HashMap::new())?;
+                let base = evaluate_with_context(&left, context)?;
                 if base <= 0.0 || base == 1.0 { return Err("Math error: Invalid log base".to_string()); }
                 if target <= 0.0 { return Err("Math error: Log of non-positive number".to_string()); }
                 
@@ -174,24 +175,23 @@ pub fn solve_numerically(
     expr: &Expression,
     var: &str,
     initial_guess: f64,
+    context: &VariableContext
 ) -> Result<f64, String> {
     // Try the provided initial guess first (fast path)
-    if let Ok(result) = newton_single(expr, var, initial_guess) {
+    if let Ok(result) = newton_single(expr, var, initial_guess, context) {
         return Ok(result);
     }
     
     // Only try multiple guesses if the first one fails AND we have trig
     if contains_trig(expr) {
-        // Use a small, targeted set of guesses - most trig solutions are in [0, 360]
         let guesses = [0.0, 30.0, 45.0, 60.0, 90.0, 180.0, 270.0, -30.0, -45.0, -60.0, -90.0];
         
         for &guess in &guesses {
-            // Skip if we already tried this (or close to it)
             if (guess - initial_guess).abs() < 0.1 {
                 continue;
             }
             
-            if let Ok(result) = newton_single(expr, var, guess) {
+            if let Ok(result) = newton_single(expr, var, guess, context) {
                 return Ok(result);
             }
         }
@@ -238,23 +238,22 @@ fn newton_single(
     expr: &Expression,
     var: &str,
     initial_guess: f64,
+    context: &VariableContext, 
 ) -> Result<f64, String> {
     let mut x = initial_guess;
     let h = 1e-7;
-    let mut context = HashMap::with_capacity(1); // Pre-allocate
+    let mut local_context = context.clone(); // Start with known variables
     
     for _ in 0..50 {
-        context.clear();
-        context.insert(var.to_string(), x);
-        let fx = evaluate_with_context(expr, &mut context)?;
+        local_context.insert(var.to_string(), x);
+        let fx = evaluate_with_context(expr, &local_context)?;
         
         if fx.abs() < 1e-9 {
             return Ok(snap_to_standard_angle(normalize_to_principal(x, expr)));
         }
         
-        context.clear();
-        context.insert(var.to_string(), x + h);
-        let fxh = evaluate_with_context(expr, &mut context)?;
+        local_context.insert(var.to_string(), x + h);
+        let fxh = evaluate_with_context(expr, &local_context)?;
         
         let derivative = (fxh - fx) / h;
         
@@ -272,4 +271,145 @@ fn newton_single(
     }
     
     Err("Newton's method did not converge".to_string())
+}
+
+// In variable_solve.rs
+pub fn solve_system_numerically(
+    equations: &[Expression],
+    vars: &[String],
+    context: &VariableContext,
+) -> Result<HashMap<String, f64>, String> {
+    
+    // FAST PATH: 2D Newton-Raphson for 2 variables / 2 equations
+    if vars.len() == 2 && equations.len() >= 2 {
+        if let Ok(res) = solve_2d_newton_raphson(equations, vars, context) {
+            return Ok(res);
+        }
+    }
+
+    // FALLBACK: Gradient Descent for >2 variables
+    let mut current_guesses: HashMap<String, f64> = vars.iter()
+        .map(|v| (v.clone(), 1.0))
+        .collect();
+
+    let learning_rate = 0.01;
+    let h = 1e-6;
+
+    for _ in 0..5000 {
+        let mut local_context = context.clone();
+        local_context.extend(current_guesses.clone());
+
+        let mut total_error = 0.0;
+        for eq in equations {
+            if let Expression::Comparison { left, right, .. } = eq {
+                let l_val = evaluate_with_context(left, &local_context)?;
+                let r_val = evaluate_with_context(right, &local_context)?;
+                total_error += (l_val - r_val).powi(2);
+            }
+        }
+
+        if total_error < 1e-9 {
+            // Clean up floating point noise
+            for val in current_guesses.values_mut() {
+                *val = (*val * 10000.0).round() / 10000.0;
+            }
+            return Ok(current_guesses);
+        }
+
+        let mut gradients = HashMap::new();
+        for var in vars {
+            let mut stepped_context = local_context.clone();
+            stepped_context.insert(var.clone(), current_guesses[var] + h);
+
+            let mut stepped_error = 0.0;
+            for eq in equations {
+                if let Expression::Comparison { left, right, .. } = eq {
+                    let l_val = evaluate_with_context(left, &stepped_context)?;
+                    let r_val = evaluate_with_context(right, &stepped_context)?;
+                    stepped_error += (l_val - r_val).powi(2);
+                }
+            }
+
+            let grad = (stepped_error - total_error) / h;
+            gradients.insert(var.clone(), grad);
+        }
+
+        for var in vars {
+            let guess = current_guesses.get_mut(var).unwrap();
+            let step = learning_rate * gradients[var];
+            *guess -= step.clamp(-10.0, 10.0);
+        }
+    }
+
+    Err("System did not converge to a solution".to_string())
+}
+
+// Helper: Evaluates an equation to find its error (LHS - RHS = 0)
+fn get_eq_error(eq: &Expression, ctx: &VariableContext) -> Result<f64, String> {
+    if let Expression::Comparison { left, right, .. } = eq {
+        let l = evaluate_with_context(left, ctx)?;
+        let r = evaluate_with_context(right, ctx)?;
+        Ok(l - r)
+    } else {
+        Err("Not a comparison".to_string())
+    }
+}
+
+// Jacobian Matrix solver for 2x2 systems
+fn solve_2d_newton_raphson(
+    equations: &[Expression],
+    vars: &[String],
+    context: &VariableContext,
+) -> Result<HashMap<String, f64>, String> {
+    let mut x = 1.0;
+    let mut y = 1.0;
+    let h = 1e-6;
+    let var_x = &vars[0];
+    let var_y = &vars[1];
+    let eq1 = &equations[0];
+    let eq2 = &equations[1];
+
+    let mut local_context = context.clone();
+
+    for _ in 0..100 {
+        local_context.insert(var_x.clone(), x);
+        local_context.insert(var_y.clone(), y);
+
+        let f1 = get_eq_error(eq1, &local_context)?;
+        let f2 = get_eq_error(eq2, &local_context)?;
+
+        // Converged!
+        if f1.abs() < 1e-9 && f2.abs() < 1e-9 {
+            let mut res = HashMap::new();
+            res.insert(var_x.clone(), (x * 10000.0).round() / 10000.0);
+            res.insert(var_y.clone(), (y * 10000.0).round() / 10000.0);
+            return Ok(res);
+        }
+
+        // Calculate Partial Derivatives for the Jacobian Matrix
+        local_context.insert(var_x.clone(), x + h);
+        let f1_dx = (get_eq_error(eq1, &local_context)? - f1) / h;
+        let f2_dx = (get_eq_error(eq2, &local_context)? - f2) / h;
+        local_context.insert(var_x.clone(), x); // Reset x
+
+        local_context.insert(var_y.clone(), y + h);
+        let f1_dy = (get_eq_error(eq1, &local_context)? - f1) / h;
+        let f2_dy = (get_eq_error(eq2, &local_context)? - f2) / h;
+        local_context.insert(var_y.clone(), y); // Reset y
+
+        // Determinant of Jacobian
+        let det = (f1_dx * f2_dy) - (f1_dy * f2_dx);
+        if det.abs() < 1e-12 {
+            return Err("Singular Jacobian (Parallel lines or local minima)".to_string());
+        }
+
+        // Inverse Jacobian multiplication to find step size
+        let dx = (f1 * f2_dy - f2 * f1_dy) / det;
+        let dy = (f1_dx * f2 - f2_dx * f1) / det;
+
+        x -= dx;
+        y -= dy;
+    }
+    
+    Err("Newton 2D failed to converge".to_string())
 }
