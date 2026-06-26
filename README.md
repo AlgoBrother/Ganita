@@ -134,6 +134,7 @@ radians
 * Nested expression evaluation
 * Trigonometric functions
 * Solving for Unknown variable (`x`)
+* Multivariable equation solving (2x2 systems)
 
 ### In Progress
 
