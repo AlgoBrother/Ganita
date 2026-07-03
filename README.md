@@ -1,4 +1,4 @@
-# NLP_Math_Engine
+# Ganita Math Engine
 
 A Rust-based natural language mathematics engine that interprets and executes mathematical operations expressed in plain English.
 
